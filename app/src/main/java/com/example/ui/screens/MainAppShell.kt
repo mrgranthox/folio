@@ -1,16 +1,25 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Settings
@@ -18,14 +27,17 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -36,6 +48,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -76,6 +89,8 @@ fun MainAppShell(
     var showAccountsDialog by remember { mutableStateOf(false) }
     var showCategoriesDialog by remember { mutableStateOf(false) }
     var showExportBackupDialog by remember { mutableStateOf(false) }
+    var showOnboardingFunnel by remember { mutableStateOf(false) }
+    var showAiChatSheet by remember { mutableStateOf(false) }
 
     val addExpenseSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val detailSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -84,6 +99,11 @@ fun MainAppShell(
     val accountsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val categoriesSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val exportBackupSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val aiChatSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    val chatMessages by viewModel.chatMessages.collectAsStateWithLifecycle()
+    val isAiThinking by viewModel.isAiThinking.collectAsStateWithLifecycle()
+    val customGeminiApiKey by viewModel.customGeminiApiKey.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         viewModel.snackbarEvent.collectLatest { message ->
@@ -104,7 +124,7 @@ fun MainAppShell(
                             0 -> "Folio Expenses"
                             1 -> "Expense Ledger"
                             2 -> "Spending Analytics"
-                            3 -> "Review & Clean Up"
+                            3 -> "Review"
                             4 -> "Settings"
                             else -> "Folio"
                         },
@@ -115,53 +135,12 @@ fun MainAppShell(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
             )
-        },
-        bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 6.dp,
-                windowInsets = WindowInsets.navigationBars
-            ) {
-                AppTab.entries.forEachIndexed { index, tab ->
-                    NavigationBarItem(
-                        selected = selectedTab == index,
-                        onClick = { selectedTab = index },
-                        icon = {
-                            if (tab == AppTab.REVIEW && reviewBadgeCount > 0) {
-                                BadgedBox(badge = {
-                                    Badge(containerColor = MaterialTheme.colorScheme.error) {
-                                        Text("$reviewBadgeCount")
-                                    }
-                                }) {
-                                    Icon(tab.icon, contentDescription = tab.label)
-                                }
-                            } else {
-                                Icon(tab.icon, contentDescription = tab.label)
-                            }
-                        },
-                        label = { Text(tab.label, fontSize = 11.sp) }
-                    )
-                }
-            }
-        },
-        floatingActionButton = {
-            if (selectedTab in 0..1) {
-                FloatingActionButton(
-                    onClick = { showAddExpenseSheet = true },
-                    containerColor = PrimaryGreen,
-                    contentColor = Color.Black,
-                    shape = CircleShape,
-                    modifier = Modifier.testTag("fab_add_entry")
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Expense", modifier = Modifier.size(28.dp))
-                }
-            }
         }
     ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(top = innerPadding.calculateTopPadding())
         ) {
             when (selectedTab) {
                 0 -> OverviewScreen(
@@ -214,8 +193,125 @@ fun MainAppShell(
                     onOpenCategories = { showCategoriesDialog = true },
                     onOpenExportBackup = { showExportBackupDialog = true },
                     onResetDemoData = { viewModel.resetDemoData() },
-                    onClearAllData = { viewModel.clearAllData() }
+                    onClearAllData = { viewModel.clearAllData() },
+                    onOpenOnboardingFunnel = { showOnboardingFunnel = true },
+                    snackbarHostState = snackbarHostState
                 )
+            }
+
+            // Floating Action Buttons (Gemini AI on top, Add Expense + below)
+            if (selectedTab in 0..1) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(end = 16.dp, bottom = 78.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Gemini AI Button (logo only, on top of add expense)
+                    FloatingActionButton(
+                        onClick = { showAiChatSheet = true },
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                        shape = CircleShape,
+                        modifier = Modifier
+                            .size(46.dp)
+                            .testTag("gemini_ai_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = "Gemini AI",
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
+                    // Add Expense Button (just the + sign, no text)
+                    FloatingActionButton(
+                        onClick = { showAddExpenseSheet = true },
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        shape = CircleShape,
+                        modifier = Modifier
+                            .size(56.dp)
+                            .testTag("fab_add_entry")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Add Expense",
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                }
+            }
+
+            // Floating Navigation Tab Bar (floats over content at BottomCenter, 3dp above navigation bar)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(start = 16.dp, end = 16.dp, bottom = 3.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = 520.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
+                    tonalElevation = 0.dp,
+                    shadowElevation = 0.dp,
+                    border = BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                    )
+                ) {
+                    NavigationBar(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(62.dp),
+                        containerColor = Color.Transparent,
+                        tonalElevation = 0.dp,
+                        windowInsets = WindowInsets(0, 0, 0, 0)
+                    ) {
+                        AppTab.entries.forEachIndexed { index, tab ->
+                            val isSelected = selectedTab == index
+                            NavigationBarItem(
+                                selected = isSelected,
+                                onClick = { selectedTab = index },
+                                icon = {
+                                    if (tab == AppTab.REVIEW && reviewBadgeCount > 0) {
+                                        BadgedBox(badge = {
+                                            Badge(containerColor = MaterialTheme.colorScheme.error) {
+                                                Text("$reviewBadgeCount")
+                                            }
+                                        }) {
+                                            Icon(tab.icon, contentDescription = tab.label)
+                                        }
+                                    } else {
+                                        Icon(tab.icon, contentDescription = tab.label)
+                                    }
+                                },
+                                label = {
+                                    Text(
+                                        text = tab.label,
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                        )
+                                    )
+                                },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -285,6 +381,8 @@ fun MainAppShell(
 
     if (showQuickPasteSmsSheet) {
         QuickPasteSmsDialog(
+            accounts = state.accounts,
+            categories = state.categories,
             sheetState = quickPasteSheetState,
             onDismiss = { showQuickPasteSmsSheet = false },
             onIngest = { rawSms ->
@@ -337,6 +435,28 @@ fun MainAppShell(
             onImportEncrypted = { payload, pass, callback ->
                 viewModel.importEncryptedBackup(payload, pass, callback)
             }
+        )
+    }
+
+    if (showOnboardingFunnel) {
+        OnboardingFunnelScreen(
+            onComplete = { selectedCurrency, selectedRails ->
+                showOnboardingFunnel = false
+            },
+            onDismiss = { showOnboardingFunnel = false }
+        )
+    }
+
+    if (showAiChatSheet) {
+        FolioAiChatSheet(
+            messages = chatMessages,
+            isThinking = isAiThinking,
+            onSendMessage = { prompt -> viewModel.sendAiMessage(prompt) },
+            onClearHistory = { viewModel.clearChatHistory() },
+            apiKey = customGeminiApiKey,
+            onSaveApiKey = { key -> viewModel.setCustomGeminiApiKey(key) },
+            sheetState = aiChatSheetState,
+            onDismiss = { showAiChatSheet = false }
         )
     }
 }

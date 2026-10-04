@@ -62,7 +62,6 @@ fun SpendingDonutChart(
     val activeItem = selectedIndex?.let { if (it in items.indices) items[it] else null }
     val displayTitle = activeItem?.category?.name ?: "Total Spent"
     val displayAmount = activeItem?.totalSpend ?: totalSpending
-    val displayPct = activeItem?.let { " (${String.format("%.1f", it.percentageOfTotal * 100)}%)" } ?: ""
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -149,14 +148,6 @@ fun SpendingDonutChart(
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center
                 )
-                if (displayPct.isNotEmpty()) {
-                    Text(
-                        text = displayPct,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
             }
         }
     }

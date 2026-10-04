@@ -5,40 +5,43 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DocumentScanner
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -48,20 +51,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.AccountEntity
 import com.example.data.model.CategoryEntity
 import com.example.ui.components.CategoryIconBadge
-import com.example.ui.components.NumericKeypad
 import com.example.ui.theme.CreditGreen
 import com.example.ui.theme.DebitRed
-import com.example.ui.theme.PrimaryGreen
 
+/**
+ * Add / Edit Expense Sheet:
+ * - Uses Android's native numeric keypad (KeyboardType.Decimal) for direct, responsive entry.
+ * - Outlined Dropdowns for Account Rail and Category.
+ * - Tab styling matching the navigation bar brand colors.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddExpenseSheet(
@@ -99,23 +106,26 @@ fun AddExpenseSheet(
         mutableStateOf(initialCat?.id ?: categories.firstOrNull()?.id ?: "")
     }
 
-    val displayAmount = if (amountString.isBlank()) "0.00" else amountString
+    var accountDropdownExpanded by remember { mutableStateOf(false) }
+    var categoryDropdownExpanded by remember { mutableStateOf(false) }
+
+    val selectedAccount = accounts.firstOrNull { it.id == selectedAccountId } ?: accounts.firstOrNull()
+    val selectedCategory = categories.firstOrNull { it.id == selectedCategoryId } ?: categories.firstOrNull()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         containerColor = MaterialTheme.colorScheme.surface
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 8.dp)
+                .padding(horizontal = 20.dp, vertical = 6.dp)
                 .verticalScroll(rememberScrollState())
-                .imePadding()
                 .testTag("add_expense_sheet")
         ) {
-            // Sheet Header: Close button, Title, OCR Scan button
+            // Sheet Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -125,7 +135,7 @@ fun AddExpenseSheet(
                     Icon(Icons.Default.Close, contentDescription = "Close")
                 }
                 Text(
-                    text = if (isIncome) "Add Income" else "Add Expense",
+                    text = if (isIncome) "Record Income" else "Record Expense",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -137,15 +147,21 @@ fun AddExpenseSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
-            // Income vs Expense Tab
+            // Income vs Expense Tabs (styled to match navigation button colors)
             TabRow(
                 selectedTabIndex = if (isIncome) 1 else 0,
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp)),
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                indicator = { tabPositions ->
+                    TabRowDefaults.SecondaryIndicator(
+                        Modifier.tabIndicatorOffset(tabPositions[if (isIncome) 1 else 0]),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             ) {
                 Tab(
                     selected = !isIncome,
@@ -154,7 +170,13 @@ fun AddExpenseSheet(
                         val cat = categories.firstOrNull { !it.name.contains("Income", ignoreCase = true) }
                         if (cat != null) selectedCategoryId = cat.id
                     },
-                    text = { Text("Expense", fontWeight = if (!isIncome) FontWeight.Bold else FontWeight.Normal, color = if (!isIncome) DebitRed else MaterialTheme.colorScheme.onSurfaceVariant) }
+                    text = {
+                        Text(
+                            text = "Expense",
+                            fontWeight = if (!isIncome) FontWeight.Bold else FontWeight.Medium,
+                            color = if (!isIncome) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 )
                 Tab(
                     selected = isIncome,
@@ -163,164 +185,266 @@ fun AddExpenseSheet(
                         val cat = categories.firstOrNull { it.name.contains("Income", ignoreCase = true) }
                         if (cat != null) selectedCategoryId = cat.id
                     },
-                    text = { Text("Income", fontWeight = if (isIncome) FontWeight.Bold else FontWeight.Normal, color = if (isIncome) CreditGreen else MaterialTheme.colorScheme.onSurfaceVariant) }
+                    text = {
+                        Text(
+                            text = "Income",
+                            fontWeight = if (isIncome) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isIncome) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Big Amount Display Box
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+            // Currency Selector Pills
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp, horizontal = 20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    // Currency selector pills
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                listOf("GHS", "USD", "EUR", "GBP").forEach { curr ->
+                    val isCurrSelected = selectedCurrency == curr
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                if (isCurrSelected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant
+                            )
+                            .clickable { selectedCurrency = curr }
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
                     ) {
-                        listOf("GHS", "USD", "EUR", "GBP").forEach { curr ->
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (selectedCurrency == curr) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
-                                    .clickable { selectedCurrency = curr }
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-                            ) {
-                                Text(
-                                    text = curr,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (selectedCurrency == curr) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                        Text(
+                            text = curr,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isCurrSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // 1. Native Keypad Amount Field
+            OutlinedTextField(
+                value = amountString,
+                onValueChange = { input ->
+                    val filtered = input.filter { it.isDigit() || it == '.' }
+                    if (filtered.count { it == '.' } <= 1 && filtered.length <= 10) {
+                        amountString = filtered
+                    }
+                },
+                label = { Text("Amount in $selectedCurrency") },
+                placeholder = { Text("0.00") },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Decimal,
+                    imeAction = ImeAction.Next
+                ),
+                singleLine = true,
+                textStyle = MaterialTheme.typography.headlineMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = if (isIncome) CreditGreen else DebitRed
+                ),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("amount_input_field"),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                ),
+                trailingIcon = {
+                    if (amountString.isNotEmpty()) {
+                        IconButton(onClick = { amountString = "" }) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(18.dp))
                         }
                     }
+                }
+            )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-                    Text(
-                        text = "$selectedCurrency $displayAmount",
-                        style = MaterialTheme.typography.headlineLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 36.sp
-                        ),
-                        color = if (isIncome) CreditGreen else DebitRed,
-                        textAlign = TextAlign.Center
+            // Quick add increment chips (for fast 1-tap addition)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf(10.0, 50.0, 100.0, 500.0).forEach { addVal ->
+                    AssistChip(
+                        onClick = {
+                            val cur = amountString.toDoubleOrNull() ?: 0.0
+                            val total = cur + addVal
+                            amountString = if (total % 1.0 == 0.0) {
+                                total.toInt().toString()
+                            } else {
+                                String.format(java.util.Locale.US, "%.2f", total)
+                            }
+                        },
+                        label = { Text("+${addVal.toInt()}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            labelColor = MaterialTheme.colorScheme.onSurface
+                        )
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Merchant / Counterparty input
+            // 2. Outlined Dropdowns for Account Rail & Category
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Account Rail Dropdown
+                Box(modifier = Modifier.weight(1f)) {
+                    OutlinedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { accountDropdownExpanded = true },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Payment Rail", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    text = selectedAccount?.name ?: "Select Rail",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                    maxLines = 1,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = accountDropdownExpanded,
+                        onDismissRequest = { accountDropdownExpanded = false }
+                    ) {
+                        accounts.forEach { acc ->
+                            DropdownMenuItem(
+                                text = { Text(acc.name, style = MaterialTheme.typography.bodyMedium) },
+                                onClick = {
+                                    selectedAccountId = acc.id
+                                    accountDropdownExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // Category Dropdown
+                Box(modifier = Modifier.weight(1f)) {
+                    OutlinedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { categoryDropdownExpanded = true },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Category", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    text = selectedCategory?.name ?: "Select Category",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                    maxLines = 1,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = categoryDropdownExpanded,
+                        onDismissRequest = { categoryDropdownExpanded = false }
+                    ) {
+                        categories.forEach { cat ->
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        CategoryIconBadge(
+                                            categoryName = cat.name,
+                                            iconKey = cat.icon,
+                                            colorHex = cat.colorHex,
+                                            size = 22.dp,
+                                            iconSize = 12.dp
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(cat.name, style = MaterialTheme.typography.bodyMedium)
+                                    }
+                                },
+                                onClick = {
+                                    selectedCategoryId = cat.id
+                                    categoryDropdownExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 3. Counterparty / Merchant Field
             OutlinedTextField(
                 value = counterparty,
                 onValueChange = { counterparty = it },
-                label = { Text(if (isIncome) "Received From (e.g. Acme Client Retainer)" else "Paid To / Merchant (e.g. KFC, TotalEnergies)") },
+                label = { Text(if (isIncome) "Received From (Client, Employer, etc.)" else "Payee / Merchant (Shell, KFC, Groceries, etc.)") },
                 singleLine = true,
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth()
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                )
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Account Selector
-            Text(
-                text = "Select Account / Rail",
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(accounts) { acc ->
-                    FilterChip(
-                        selected = selectedAccountId == acc.id,
-                        onClick = { selectedAccountId = acc.id },
-                        label = { Text(acc.name, fontSize = 12.sp) },
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Category Selector
-            Text(
-                text = "Select Category",
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(categories) { cat ->
-                    FilterChip(
-                        selected = selectedCategoryId == cat.id,
-                        onClick = { selectedCategoryId = cat.id },
-                        label = { Text(cat.name, fontSize = 12.sp) },
-                        leadingIcon = {
-                            CategoryIconBadge(
-                                categoryName = cat.name,
-                                iconKey = cat.icon,
-                                colorHex = cat.colorHex,
-                                size = 20.dp,
-                                iconSize = 12.dp
-                            )
-                        },
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Notes input
+            // 4. Notes input
             OutlinedTextField(
                 value = notes,
                 onValueChange = { notes = it },
-                label = { Text("Notes & Details (optional)") },
+                label = { Text("Notes (optional)") },
                 singleLine = true,
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth()
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                )
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
-            // Numeric Keypad
-            NumericKeypad(
-                onDigitPress = { digit ->
-                    if (digit == "." && amountString.contains(".")) return@NumericKeypad
-                    if (amountString.length < 9) {
-                        amountString += digit
-                    }
-                },
-                onBackspace = {
-                    if (amountString.isNotEmpty()) {
-                        amountString = amountString.dropLast(1)
-                    }
-                },
-                onQuickAdd = { addVal ->
-                    val current = amountString.toDoubleOrNull() ?: 0.0
-                    amountString = String.format(java.util.Locale.US, "%.2f", current + addVal)
-                }
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Save Button
+            // 5. Save Button
             val numAmount = amountString.toDoubleOrNull() ?: 0.0
             Button(
                 onClick = {
                     if (numAmount > 0) {
                         onSave(
-                            counterparty.ifBlank { if (isIncome) "Payment Inflow" else "General Expense" },
+                            counterparty.ifBlank { if (isIncome) "Inflow Deposit" else (selectedCategory?.name ?: "General Expense") },
                             numAmount,
                             selectedCurrency,
                             isIncome,
@@ -334,17 +458,23 @@ fun AddExpenseSheet(
                 enabled = numAmount > 0,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(54.dp)
+                    .height(48.dp)
                     .testTag("submit_expense_button"),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = if (isIncome) CreditGreen else PrimaryGreen)
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
             ) {
-                Icon(Icons.Default.Check, contentDescription = null)
+                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Save ${if (isIncome) "Income" else "Expense"}", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = "Save ${if (isIncome) "Income" else "Expense"} ($selectedCurrency ${if (numAmount > 0) String.format("%.2f", numAmount) else "0.00"})",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
         }
     }
 }

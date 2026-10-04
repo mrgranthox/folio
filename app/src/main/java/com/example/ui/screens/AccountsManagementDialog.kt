@@ -63,6 +63,8 @@ fun AccountsManagementDialog(
     var balanceString by remember { mutableStateOf("") }
     var currency by remember { mutableStateOf("GHS") }
 
+    var accountToDelete by remember { mutableStateOf<AccountEntity?>(null) }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -208,7 +210,7 @@ fun AccountsManagementDialog(
                         )
                         if (accounts.size > 1) {
                             Spacer(modifier = Modifier.width(4.dp))
-                            IconButton(onClick = { onDeleteAccount(acc.id) }) {
+                            IconButton(onClick = { accountToDelete = acc }) {
                                 Icon(Icons.Default.Delete, contentDescription = "Delete", tint = DebitRed.copy(alpha = 0.7f), modifier = Modifier.size(18.dp))
                             }
                         }
@@ -218,5 +220,39 @@ fun AccountsManagementDialog(
 
             Spacer(modifier = Modifier.height(28.dp))
         }
+    }
+
+    accountToDelete?.let { acc ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { accountToDelete = null },
+            title = {
+                Text(
+                    text = "Deactivate ${acc.name}?",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+            },
+            text = {
+                Text(
+                    text = "Warning: This will perform a soft-delete on this payment rail. Your historical transactions and expense logs linked to ${acc.name} will remain safe and intact.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        onDeleteAccount(acc.id)
+                        accountToDelete = null
+                    }
+                ) {
+                    Text("Deactivate (Soft-Delete)", color = DebitRed, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { accountToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }

@@ -104,24 +104,46 @@ fun TransactionsScreen(
             OutlinedTextField(
                 value = state.searchQuery,
                 onValueChange = onSearchChange,
-                placeholder = { Text("Search by merchant, note, or reference...", fontSize = 14.sp) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                placeholder = {
+                    Text(
+                        text = "Search transactions...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
                 trailingIcon = {
                     if (state.searchQuery.isNotEmpty()) {
                         IconButton(onClick = { onSearchChange("") }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear")
+                            Icon(
+                                imageVector = Icons.Default.Clear,
+                                contentDescription = "Clear",
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                     }
                 },
                 singleLine = true,
-                shape = RoundedCornerShape(16.dp),
+                textStyle = MaterialTheme.typography.bodyMedium,
+                shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
                     unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
                     focusedBorderColor = MaterialTheme.colorScheme.primary
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
             )
 
             // Filters row
@@ -240,8 +262,8 @@ fun TransactionsScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 80.dp, top = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp, top = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     grouped.forEach { (dateMillis, txList) ->
                         item(key = "header-$dateMillis") {
@@ -249,7 +271,7 @@ fun TransactionsScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(top = 12.dp, bottom = 4.dp, start = 4.dp, end = 4.dp),
+                                    .padding(top = 10.dp, bottom = 4.dp, start = 4.dp, end = 4.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -274,22 +296,23 @@ fun TransactionsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable { onTransactionClick(tx) },
-                                shape = RoundedCornerShape(16.dp),
+                                shape = RoundedCornerShape(14.dp),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-                                )
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                                ),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                             ) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     CategoryIconBadge(
                                         categoryName = tx.categoryName ?: "General",
                                         colorHex = tx.categoryColor,
-                                        size = 42.dp,
-                                        iconSize = 20.dp
+                                        size = 38.dp,
+                                        iconSize = 18.dp
                                     )
 
                                     Spacer(modifier = Modifier.width(12.dp))
@@ -304,7 +327,7 @@ fun TransactionsScreen(
                                         )
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Text(
-                                            text = "${tx.accountRail ?: "Direct"} · ${timeFormat.format(Date(tx.timestamp))}${if (!tx.externalRef.isNullOrBlank()) " · Ref: ${tx.externalRef}" else ""}",
+                                            text = "${tx.accountRail ?: "Payment"} · ${timeFormat.format(Date(tx.timestamp))}${if (!tx.externalRef.isNullOrBlank()) " · Ref: ${tx.externalRef}" else ""}",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             maxLines = 1,

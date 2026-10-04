@@ -1,8 +1,11 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.ai.ChatMessage
+import com.example.data.ai.GeminiChatService
 import com.example.data.engine.ReceiptDraft
 import com.example.data.engine.ReconciliationEngine
 import com.example.data.engine.ReconciliationOutcome
@@ -20,6 +23,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -617,6 +621,119 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             repository.clearAllUserData()
             _snackbarEvent.emit("All transaction data cleared.")
+        }
+    }
+
+    // --- Gemini AI Support & Personal Copilot ---
+    private val geminiService = GeminiChatService()
+    private val prefs = application.getSharedPreferences("folio_ai_prefs", Context.MODE_PRIVATE)
+
+    private val _customGeminiApiKey = MutableStateFlow(prefs.getString("custom_gemini_api_key", "") ?: "")
+    val customGeminiApiKey: StateFlow<String> = _customGeminiApiKey.asStateFlow()
+
+    fun setCustomGeminiApiKey(key: String) {
+        val trimmed = key.trim()
+        prefs.edit().putString("custom_gemini_api_key", trimmed).apply()
+        _customGeminiApiKey.value = trimmed
+        viewModelScope.launch {
+            _snackbarEvent.emit(if (trimmed.isNotBlank()) "Gemini API Key saved!" else "Gemini API Key cleared.")
+        }
+    }
+
+    private val _chatMessages = MutableStateFlow<List<ChatMessage>>(
+        listOf(
+            ChatMessage(
+                isUser = false,
+                text = "Hello! I'm your Folio AI Financial Copilot. I have real-time visibility into your accounts, recent transactions, and budgets. Ask me anything about your spending, balances, or financial health!"
+            )
+        )
+    )
+    val chatMessages: StateFlow<List<ChatMessage>> = _chatMessages.asStateFlow()
+
+    private val _isAiThinking = MutableStateFlow(false)
+    val isAiThinking: StateFlow<Boolean> = _isAiThinking.asStateFlow()
+
+    fun clearChatHistory() {
+        _chatMessages.value = listOf(
+            ChatMessage(
+                isUser = false,
+                text = "Conversation reset. How can I help you analyze your accounts and spending today?"
+            )
+        )
+    }
+
+    fun sendAiMessage(promptText: String) {
+        val prompt = promptText.trim()
+        if (prompt.isBlank() || _isAiThinking.value) return
+
+        val userMsg = ChatMessage(isUser = true, text = prompt)
+        _chatMessages.value = _chatMessages.value + userMsg
+        _isAiThinking.value = true
+
+        viewModelScope.launch {
+            val state = uiState.value
+
+            // Build grounded financial context specific to this user
+            val contextSb = StringBuilder()
+            contextSb.append("You are 'Folio AI', an in-app personal financial support copilot and advisor for Folio Expenses.\n")
+            contextSb.append("The user is asking a question. You have real-time access to their specific account data below.\n")
+            contextSb.append("Answer questions specifically, concisely, accurately, and encouragement using ONLY the real numbers provided.\n\n")
+
+            contextSb.append("--- USER'S SPECIFIC ACCOUNT & TRANSACTION DATA ---\n")
+            contextSb.append("Preferred Currency: ${state.preferredCurrency}\n")
+            contextSb.append("Total Outflow This Month: ${CurrencyUtils.format(state.thisMonthOutflow, state.preferredCurrency)}\n")
+            contextSb.append("Total Inflow This Month: ${CurrencyUtils.format(state.thisMonthInflow, state.preferredCurrency)}\n")
+            contextSb.append("Net Cash Flow This Month: ${CurrencyUtils.format(state.thisMonthNet, state.preferredCurrency)}\n")
+            contextSb.append("Monthly Budget: ${CurrencyUtils.format(state.totalMonthlyBudget, state.preferredCurrency)} (${String.format(Locale.US, "%.0f", state.monthlyBudgetUsedPct * 100)}% used)\n\n")
+
+            contextSb.append("User Accounts & Balances:\n")
+            for (acc in state.accounts) {
+                contextSb.append("- ${acc.name} (${acc.accountType}): ${acc.currency} ${String.format(Locale.US, "%.2f", acc.currentBalance)}\n")
+            }
+
+            contextSb.append("\nCategory Spending This Month:\n")
+            for (cs in state.categorySpendList) {
+                val budgetNote = cs.budgetLimit?.let { " [Budget: ${state.preferredCurrency} ${String.format(Locale.US, "%.2f", it)}]" } ?: ""
+                contextSb.append("- ${cs.category.name}: ${CurrencyUtils.format(cs.totalSpend, state.preferredCurrency)} (${String.format(Locale.US, "%.1f", cs.percentageOfTotal)}%)$budgetNote\n")
+            }
+
+            contextSb.append("\nTop Spending Merchant: ${state.topSpendingMerchant} (${CurrencyUtils.format(state.topSpendAmount, state.preferredCurrency)})\n")
+            contextSb.append("Average Daily Burn Rate: ${CurrencyUtils.format(state.avgDailyExpense, state.preferredCurrency)}\n")
+
+            contextSb.append("\nRecent Transactions:\n")
+            val recentTxs = state.allTransactions.take(15)
+            val dFormat = SimpleDateFormat("MMM dd, yyyy", Locale.US)
+            for (tx in recentTxs) {
+                val flow = if (tx.amount >= 0) "INCOME" else "EXPENSE"
+                val cat = tx.categoryName ?: "General"
+                val rail = tx.accountRail ?: "Wallet"
+                contextSb.append("- [${dFormat.format(Date(tx.timestamp))}] $flow ${tx.currency} ${String.format(Locale.US, "%.2f", abs(tx.amount))} at ${tx.counterparty} ($cat via $rail)\n")
+            }
+
+            if (state.duplicateCandidates.isNotEmpty() || state.unrecognizedMessages.isNotEmpty()) {
+                contextSb.append("\nReview Queue: ${state.duplicateCandidates.size} duplicate candidates, ${state.unrecognizedMessages.size} unfiled SMS alerts.\n")
+            }
+
+            val fallback = buildString {
+                append("• Net Flow: ${CurrencyUtils.format(state.thisMonthNet, state.preferredCurrency)}\n")
+                append("• Total Spent This Month: ${CurrencyUtils.format(state.thisMonthOutflow, state.preferredCurrency)}\n")
+                append("• Budget Used: ${String.format(Locale.US, "%.0f", state.monthlyBudgetUsedPct * 100)}%\n")
+                append("• Accounts: ${state.accounts.joinToString { "${it.name} (${it.currency} ${String.format(Locale.US, "%.2f", it.currentBalance)})" }}\n")
+                if (recentTxs.isNotEmpty()) {
+                    append("• Latest: ${recentTxs.first().currency} ${String.format(Locale.US, "%.2f", abs(recentTxs.first().amount))} at ${recentTxs.first().counterparty}")
+                }
+            }
+
+            val assistantResponse = geminiService.sendChat(
+                history = _chatMessages.value,
+                systemInstructionText = contextSb.toString(),
+                fallbackDataSummary = fallback,
+                apiKeyOverride = _customGeminiApiKey.value.ifBlank { null }
+            )
+
+            val botMsg = ChatMessage(isUser = false, text = assistantResponse)
+            _chatMessages.value = _chatMessages.value + botMsg
+            _isAiThinking.value = false
         }
     }
 }

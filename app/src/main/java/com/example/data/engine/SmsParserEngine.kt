@@ -149,15 +149,44 @@ class SmsParserEngine {
 
         // 5. Extract Counterparty / Merchant
         var counterparty: String? = null
-        val merchantPattern = Pattern.compile(
-            """(?:payment to|paid to|sent to|made to|transferred to|received from|from|\bto)\s+([A-Za-z0-9\s\-]+?)(?:\.\s*(?:Current|Bal|Ref|Txn|Fee|is)|\s+on\s+\d|\s*$|\.)""",
+
+        // Priority 5a: Specific utility / power / water meter pattern: e.g. "to meter 54310900789 (STEPHEN ETSE)"
+        val meterPattern = Pattern.compile(
+            """(?:to\s+meter|meter)\s+([A-Za-z0-9\-]+)\s*(?:\(([^)]+)\))?""",
             Pattern.CASE_INSENSITIVE
         )
-        val merchantMatcher = merchantPattern.matcher(cleanBody)
-        if (merchantMatcher.find()) {
-            val candidate = merchantMatcher.group(1)?.trim()
-            if (!candidate.isNullOrBlank() && candidate.length in 2..60) {
-                counterparty = candidate
+        val meterMatcher = meterPattern.matcher(cleanBody)
+        if (meterMatcher.find()) {
+            val meterNum = meterMatcher.group(1)?.trim()
+            val name = meterMatcher.group(2)?.trim()
+            if (!name.isNullOrBlank()) {
+                counterparty = "$name (Meter $meterNum)"
+            } else if (!meterNum.isNullOrBlank()) {
+                counterparty = "ECG Meter $meterNum"
+            }
+        }
+
+        // Priority 5b: General merchant pattern
+        if (counterparty == null) {
+            val merchantPattern = Pattern.compile(
+                """(?:payment to|paid to|sent to|made to|transferred to|received from|from|\bto)\s+([A-Za-z0-9\s\-()&'.]+?)(?:\.\s*(?:Current|Bal|Ref|Txn|Fee|is)|\s+has\s+been|\s+on\s+\d|\s*$|\.)""",
+                Pattern.CASE_INSENSITIVE
+            )
+            val merchantMatcher = merchantPattern.matcher(cleanBody)
+            while (merchantMatcher.find()) {
+                val candidate = merchantMatcher.group(1)?.trim()
+                val lowerCandidate = candidate?.lowercase(Locale.ROOT) ?: ""
+                val isActionPhrase = lowerCandidate.startsWith("recharge your meter") ||
+                        lowerCandidate.startsWith("recharge meter") ||
+                        lowerCandidate.startsWith("use this token") ||
+                        lowerCandidate.startsWith("buy bundle") ||
+                        lowerCandidate.startsWith("pay bill") ||
+                        lowerCandidate.startsWith("cash out") ||
+                        lowerCandidate.startsWith("cash in")
+                if (!candidate.isNullOrBlank() && candidate.length in 2..60 && !isActionPhrase) {
+                    counterparty = candidate
+                    break
+                }
             }
         }
 
