@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Wallet base body -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M28,34 C28,30.686 30.686,28 34,28 L74,28 C77.314,28 80,30.686 80,34 L80,74 C80,77.314 77.314,80 74,80 L34,80 C30.686,80 28,77.314 28,74 Z" />
+    <!-- Wallet inner flap / card slot -->
+    <path
+        android:fillColor="#047857"
+        android:pathData="M28,42 L80,42 L80,74 C80,77.314 77.314,80 74,80 L34,80 C30.686,80 28,77.314 28,74 Z" />
+    <!-- Card sticking out -->
+    <path
+        android:fillColor="#34D399"
+        android:pathData="M34,22 C34,20.895 34.895,20 36,20 L72,20 C73.105,20 74,20.895 74,22 L74,32 L34,32 Z" />
+    <!-- Wallet Clasp -->
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M60,50 L78,50 C80.209,50 82,51.791 82,54 L82,62 C82,64.209 80.209,66 78,66 L60,66 C57.791,66 56,64.209 56,62 L56,54 C56,51.791 57.791,50 60,50 Z" />
+    <!-- Clasp Button -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M72,58 A2,2 0 1,1 72,58.01" />
+    <!-- Upward Sparkline Indicator -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,66 L44,56 L50,60 L58,48 L58,54 L60,54 L60,45 L51,45 L51,47 L56.5,47 L49.5,57.5 L43.5,53.5 L32.5,64.5 Z" />
+</vector>
