@@ -18,31 +18,43 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MergeType
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Mail
 import androidx.compose.material.icons.filled.Transform
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -51,9 +63,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.AccountEntity
+import com.example.data.model.CategoryEntity
 import com.example.data.model.DuplicateCandidateItem
 import com.example.data.model.UnrecognizedMessageEntity
 import com.example.ui.components.CurrencyUtils
@@ -74,9 +89,19 @@ fun ReviewQueueScreen(
     onDismissDuplicate: (String) -> Unit,
     onConvertUnrecognized: (UnrecognizedMessageEntity) -> Unit,
     onDismissUnrecognized: (String) -> Unit,
+    onConvertUnrecognizedWithDetails: ((
+        unrecId: String,
+        counterparty: String,
+        amount: Double,
+        currency: String,
+        isIncome: Boolean,
+        accountId: String,
+        categoryId: String
+    ) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
+    var activeMessageToConvert by remember { mutableStateOf<UnrecognizedMessageEntity?>(null) }
     val dateFormat = SimpleDateFormat("MMM dd, yyyy · HH:mm", Locale.US)
 
     Box(
@@ -254,7 +279,7 @@ fun ReviewQueueScreen(
                             UnrecognizedCard(
                                 msg = msg,
                                 dateFormat = dateFormat,
-                                onConvert = { onConvertUnrecognized(msg) },
+                                onConvert = { activeMessageToConvert = msg },
                                 onDismiss = { onDismissUnrecognized(msg.id) }
                             )
                         }
@@ -264,6 +289,23 @@ fun ReviewQueueScreen(
                     }
                 }
             }
+        }
+
+        activeMessageToConvert?.let { msg ->
+            ConvertUnrecognizedDialog(
+                msg = msg,
+                accounts = state.accounts,
+                categories = state.categories,
+                onDismiss = { activeMessageToConvert = null },
+                onSave = { unrecId, counterparty, amount, currency, isIncome, accountId, categoryId ->
+                    if (onConvertUnrecognizedWithDetails != null) {
+                        onConvertUnrecognizedWithDetails(unrecId, counterparty, amount, currency, isIncome, accountId, categoryId)
+                    } else {
+                        onConvertUnrecognized(msg)
+                    }
+                    activeMessageToConvert = null
+                }
+            )
         }
     }
 }
@@ -538,9 +580,11 @@ fun UnrecognizedCard(
                         .padding(horizontal = 10.dp, vertical = 8.dp)
                 ) {
                     Text(
-                        text = "Category: ${msg.suspectedMerchant ?: "Food & Dining"}",
+                        text = "Payee: ${msg.suspectedMerchant ?: "Unknown"}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -552,9 +596,11 @@ fun UnrecognizedCard(
                         .padding(horizontal = 10.dp, vertical = 8.dp)
                 ) {
                     Text(
-                        text = "Account: Mobile Money",
+                        text = "Sender: ${msg.sender}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -591,10 +637,10 @@ fun UnrecognizedCard(
                     ),
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
                 ) {
-                    Icon(Icons.Default.Transform, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.EditNote, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Save as Expense",
+                        text = "Review & Save",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -604,4 +650,195 @@ fun UnrecognizedCard(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ConvertUnrecognizedDialog(
+    msg: UnrecognizedMessageEntity,
+    accounts: List<AccountEntity>,
+    categories: List<CategoryEntity>,
+    onDismiss: () -> Unit,
+    onSave: (
+        unrecId: String,
+        counterparty: String,
+        amount: Double,
+        currency: String,
+        isIncome: Boolean,
+        accountId: String,
+        categoryId: String
+    ) -> Unit
+) {
+    val isCreditDetected = remember(msg.rawBody) {
+        val lower = msg.rawBody.lowercase(Locale.ROOT)
+        lower.contains("received") || lower.contains("credited") || lower.contains("cash in") || lower.contains("deposit")
+    }
+    var isIncome by remember { mutableStateOf(isCreditDetected) }
+    var amountStr by remember { mutableStateOf(msg.suspectedAmount ?: "") }
+    var counterparty by remember { mutableStateOf(msg.suspectedMerchant ?: "") }
+
+    var selectedAccountId by remember {
+        val defaultAcc = accounts.firstOrNull { it.accountType.equals("MOMO", ignoreCase = true) } ?: accounts.firstOrNull()
+        mutableStateOf(defaultAcc?.id ?: "")
+    }
+    var selectedCategoryId by remember(isIncome) {
+        val initialCat = if (isIncome) {
+            categories.firstOrNull { it.name.contains("Income", ignoreCase = true) }
+        } else {
+            categories.firstOrNull { !it.name.contains("Income", ignoreCase = true) }
+        }
+        mutableStateOf(initialCat?.id ?: categories.firstOrNull()?.id ?: "")
+    }
+
+    var accountDropdownExpanded by remember { mutableStateOf(false) }
+    var categoryDropdownExpanded by remember { mutableStateOf(false) }
+
+    val selectedAccount = accounts.firstOrNull { it.id == selectedAccountId } ?: accounts.firstOrNull()
+    val selectedCategory = categories.firstOrNull { it.id == selectedCategoryId } ?: categories.firstOrNull()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Review & Convert Alert",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = msg.rawBody,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(10.dp)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = !isIncome,
+                        onClick = { isIncome = false },
+                        label = { Text("Expense (Debit)") },
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = isIncome,
+                        onClick = { isIncome = true },
+                        label = { Text("Income (Credit)") },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                OutlinedTextField(
+                    value = amountStr,
+                    onValueChange = { amountStr = it },
+                    label = { Text("Amount (GHS)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = counterparty,
+                    onValueChange = { counterparty = it },
+                    label = { Text("Payee / Counterparty") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = selectedAccount?.name ?: "Select Wallet",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Wallet / Account Rail") },
+                        trailingIcon = {
+                            IconButton(onClick = { accountDropdownExpanded = true }) {
+                                Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { accountDropdownExpanded = true }
+                    )
+                    DropdownMenu(
+                        expanded = accountDropdownExpanded,
+                        onDismissRequest = { accountDropdownExpanded = false }
+                    ) {
+                        accounts.forEach { acc ->
+                            DropdownMenuItem(
+                                text = { Text(acc.name) },
+                                onClick = {
+                                    selectedAccountId = acc.id
+                                    accountDropdownExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = selectedCategory?.name ?: "Select Category",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Category") },
+                        trailingIcon = {
+                            IconButton(onClick = { categoryDropdownExpanded = true }) {
+                                Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { categoryDropdownExpanded = true }
+                    )
+                    DropdownMenu(
+                        expanded = categoryDropdownExpanded,
+                        onDismissRequest = { categoryDropdownExpanded = false }
+                    ) {
+                        categories.forEach { cat ->
+                            DropdownMenuItem(
+                                text = { Text(cat.name) },
+                                onClick = {
+                                    selectedCategoryId = cat.id
+                                    categoryDropdownExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val amt = amountStr.toDoubleOrNull() ?: 0.0
+                    val payee = counterparty.trim().ifBlank { msg.suspectedMerchant ?: "SMS Merchant" }
+                    val acc = selectedAccountId.ifBlank { accounts.firstOrNull()?.id ?: "acc-momo" }
+                    val cat = selectedCategoryId.ifBlank { categories.firstOrNull()?.id ?: "cat-food" }
+                    onSave(msg.id, payee, amt, "GHS", isIncome, acc, cat)
+                }
+            ) {
+                Text("Save Transaction")
+            }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }

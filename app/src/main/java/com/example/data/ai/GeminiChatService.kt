@@ -13,8 +13,8 @@ import java.util.concurrent.TimeUnit
 
 class GeminiChatService {
 
-    // Using gemini-3.5-flash as mandated for general & support tasks with high free tier limits
-    private val modelName = "gemini-3.5-flash"
+    // Using gemini-2.5-flash for general & support tasks with high free tier limits
+    private val modelName = "gemini-2.5-flash"
     private val baseUrl = "https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent"
 
     private val client = OkHttpClient.Builder()
@@ -40,7 +40,7 @@ class GeminiChatService {
 
         if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
             return@withContext "💡 **Live Gemini AI requires an API Key**\n\n" +
-                    "The responses are NOT hardcoded—Folio connects directly to Google's `gemini-3.5-flash` model. However, an API key is required to make live calls.\n\n" +
+                    "The responses are NOT hardcoded—Folio connects directly to Google's `gemini-2.5-flash` model. However, an API key is required to make live calls.\n\n" +
                     "👉 Tap the **Key icon (🔑)** in the top right of this chat or the banner below to paste your free Gemini API Key (or set it in AI Studio Secrets).\n\n" +
                     "**Your Current Accounts Snapshot:**\n$fallbackDataSummary"
         }

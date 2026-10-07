@@ -240,7 +240,7 @@ class SmsParserEngine {
         // -------------------------------------------------------------
         var fee: Double? = null
         val feePattern = Pattern.compile(
-            """(?:Fee\s*charged|Service\s*Charge|Fee|Service\s*Fee|Tax|Levy)[:\s]*(?:GHS|GH[Cc¢₵\u20B5\u01B5]|USD|\$)?\s*([0-9]+(?:\.[0-9]{2})?)""",
+            """(?:Fee\s*(?:charged|was|is)?|Service\s*Charge|Fee|Service\s*Fee|Tax|Levy)[:\s]*(?:GHS|GH[Cc¢₵\u20B5\u01B5]|USD|\$)?\s*([0-9]+(?:\.[0-9]{2})?)""",
             Pattern.CASE_INSENSITIVE
         )
         val feeMatcher = feePattern.matcher(cleanBody)

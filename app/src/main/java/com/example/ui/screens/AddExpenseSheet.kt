@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.app.DatePickerDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DocumentScanner
@@ -30,6 +32,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -62,6 +66,10 @@ import com.example.data.model.CategoryEntity
 import com.example.ui.components.CategoryIconBadge
 import com.example.ui.theme.CreditGreen
 import com.example.ui.theme.DebitRed
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 /**
  * Add / Edit Expense Sheet:
@@ -83,15 +91,19 @@ fun AddExpenseSheet(
         isIncome: Boolean,
         accountId: String,
         categoryId: String,
-        notes: String?
+        notes: String?,
+        timestamp: Long
     ) -> Unit,
     onScanReceiptClicked: () -> Unit
 ) {
+    val context = LocalContext.current
     var isIncome by remember { mutableStateOf(false) }
     var amountString by remember { mutableStateOf("") }
     var selectedCurrency by remember { mutableStateOf("GHS") }
     var counterparty by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
+    var selectedTimestamp by remember { mutableStateOf(System.currentTimeMillis()) }
+    val dateFormatter = remember { SimpleDateFormat("MMM d, yyyy", Locale.US) }
 
     var selectedAccountId by remember {
         mutableStateOf(accounts.firstOrNull()?.id ?: "")
@@ -436,6 +448,81 @@ fun AddExpenseSheet(
                 )
             )
 
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Date Selection (Today, Yesterday, Custom)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val calNow = Calendar.getInstance()
+                val isToday = remember(selectedTimestamp) {
+                    val c = Calendar.getInstance().apply { timeInMillis = selectedTimestamp }
+                    c.get(Calendar.YEAR) == calNow.get(Calendar.YEAR) &&
+                            c.get(Calendar.DAY_OF_YEAR) == calNow.get(Calendar.DAY_OF_YEAR)
+                }
+                val isYesterday = remember(selectedTimestamp) {
+                    val y = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
+                    val c = Calendar.getInstance().apply { timeInMillis = selectedTimestamp }
+                    c.get(Calendar.YEAR) == y.get(Calendar.YEAR) &&
+                            c.get(Calendar.DAY_OF_YEAR) == y.get(Calendar.DAY_OF_YEAR)
+                }
+
+                FilterChip(
+                    selected = isToday,
+                    onClick = { selectedTimestamp = System.currentTimeMillis() },
+                    label = { Text("Today", fontSize = 12.sp) },
+                    shape = RoundedCornerShape(8.dp)
+                )
+
+                FilterChip(
+                    selected = isYesterday,
+                    onClick = {
+                        val c = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
+                        selectedTimestamp = c.timeInMillis
+                    },
+                    label = { Text("Yesterday", fontSize = 12.sp) },
+                    shape = RoundedCornerShape(8.dp)
+                )
+
+                FilterChip(
+                    selected = !isToday && !isYesterday,
+                    onClick = {
+                        val c = Calendar.getInstance().apply { timeInMillis = selectedTimestamp }
+                        DatePickerDialog(
+                            context,
+                            { _, y, m, d ->
+                                val picked = Calendar.getInstance().apply {
+                                    set(Calendar.YEAR, y)
+                                    set(Calendar.MONTH, m)
+                                    set(Calendar.DAY_OF_MONTH, d)
+                                }
+                                selectedTimestamp = picked.timeInMillis
+                            },
+                            c.get(Calendar.YEAR),
+                            c.get(Calendar.MONTH),
+                            c.get(Calendar.DAY_OF_MONTH)
+                        ).show()
+                    },
+                    label = {
+                        Text(
+                            if (!isToday && !isYesterday) dateFormatter.format(Date(selectedTimestamp))
+                            else "Pick Date",
+                            fontSize = 12.sp
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.CalendarMonth,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    },
+                    shape = RoundedCornerShape(8.dp)
+                )
+            }
+
             Spacer(modifier = Modifier.height(18.dp))
 
             // 5. Save Button
@@ -450,7 +537,8 @@ fun AddExpenseSheet(
                             isIncome,
                             selectedAccountId.ifBlank { accounts.firstOrNull()?.id ?: "acc-momo" },
                             selectedCategoryId.ifBlank { categories.firstOrNull()?.id ?: "cat-food" },
-                            notes.ifBlank { null }
+                            notes.ifBlank { null },
+                            selectedTimestamp
                         )
                         onDismiss()
                     }

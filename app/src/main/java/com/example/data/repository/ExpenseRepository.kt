@@ -34,7 +34,10 @@ import java.util.Date
 import java.util.Locale
 import java.util.UUID
 import javax.crypto.Cipher
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 
 class ExpenseRepository(context: Context) {
@@ -144,11 +147,42 @@ class ExpenseRepository(context: Context) {
     }
 
     suspend fun updateTransaction(transaction: TransactionEntity) = withContext(Dispatchers.IO) {
+        val oldTx = transactionDao.getTransactionById(transaction.id)
         transactionDao.updateTransaction(transaction)
+
+        if (oldTx != null) {
+            if (oldTx.accountId == transaction.accountId) {
+                val delta = transaction.amount - oldTx.amount
+                if (delta != 0.0) {
+                    val acc = accountDao.getAccountById(transaction.accountId)
+                    if (acc != null) {
+                        accountDao.updateBalance(acc.id, acc.currentBalance + delta)
+                    }
+                }
+            } else {
+                // Revert from previous account, apply to new account
+                val oldAcc = accountDao.getAccountById(oldTx.accountId)
+                if (oldAcc != null) {
+                    accountDao.updateBalance(oldAcc.id, oldAcc.currentBalance - oldTx.amount)
+                }
+                val newAcc = accountDao.getAccountById(transaction.accountId)
+                if (newAcc != null) {
+                    accountDao.updateBalance(newAcc.id, newAcc.currentBalance + transaction.amount)
+                }
+            }
+        }
     }
 
     suspend fun deleteTransaction(id: String) = withContext(Dispatchers.IO) {
-        transactionDao.softDelete(id)
+        val existing = transactionDao.getTransactionById(id)
+        if (existing != null) {
+            transactionDao.softDelete(id)
+            val account = accountDao.getAccountById(existing.accountId)
+            if (account != null) {
+                val adjustedBalance = account.currentBalance - existing.amount
+                accountDao.updateBalance(account.id, adjustedBalance)
+            }
+        }
     }
 
     // --- Accounts ---
@@ -178,11 +212,18 @@ class ExpenseRepository(context: Context) {
     }
 
     // --- Ingestion Pipeline ---
-    suspend fun ingestSms(sender: String, body: String): Pair<ReconciliationOutcome, String> = withContext(Dispatchers.IO) {
+    suspend fun ingestSms(
+        sender: String,
+        body: String,
+        overrideAccountId: String? = null,
+        overrideCategoryId: String? = null
+    ): Pair<ReconciliationOutcome, String> = withContext(Dispatchers.IO) {
         val parsed = smsParser.parse(sender, body)
         if (parsed.isFinancial) {
             val accountsList = accountDao.getAllAccountsList()
-            val targetAccount = when {
+            val targetAccount: AccountEntity = (if (!overrideAccountId.isNullOrBlank()) {
+                accountsList.firstOrNull { it.id == overrideAccountId }
+            } else null) ?: when {
                 parsed.provider.contains("Telecel", ignoreCase = true) ->
                     accountsList.firstOrNull { it.name.contains("Telecel", ignoreCase = true) || it.name.contains("Vodafone", ignoreCase = true) }
                 parsed.provider.contains("MoMo", ignoreCase = true) || parsed.provider.contains("MTN", ignoreCase = true) ->
@@ -195,8 +236,9 @@ class ExpenseRepository(context: Context) {
               ?: AccountEntity(id = "acc-default", name = "Default Wallet", accountType = "MOMO", currentBalance = 0.0)
 
             val categoriesList = categoryDao.getAllCategoriesList()
-            // Auto match category based on counterparty and SMS reference content
-            val cat = autoCategorize(parsed.counterparty, parsed.rawBody, categoriesList)
+            val cat: CategoryEntity = (if (!overrideCategoryId.isNullOrBlank()) {
+                categoriesList.firstOrNull { it.id == overrideCategoryId }
+            } else null) ?: autoCategorize(parsed.counterparty, parsed.rawBody, categoriesList)
 
             val candidateTx = parsed.toTransactionEntity(
                 accountId = targetAccount.id,
@@ -400,37 +442,64 @@ class ExpenseRepository(context: Context) {
 
         val rawJson = root.toString()
 
-        // AES-CBC Encryption with 256-bit key padded from passphrase
-        val keyBytes = passphrase.padEnd(32, '*').substring(0, 32).toByteArray(StandardCharsets.UTF_8)
-        val ivBytes = ByteArray(16)
-        SecureRandom().nextBytes(ivBytes)
+        // PBKDF2WithHmacSHA256 key derivation + AES-256-GCM authenticated encryption
+        val saltBytes = ByteArray(16)
+        SecureRandom().nextBytes(saltBytes)
+        val iterations = 100_000
+        val keySpec = PBEKeySpec(passphrase.toCharArray(), saltBytes, iterations, 256)
+        val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+        val secretKey = SecretKeySpec(factory.generateSecret(keySpec).encoded, "AES")
 
-        val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
-        val keySpec = SecretKeySpec(keyBytes, "AES")
-        val ivSpec = IvParameterSpec(ivBytes)
-        cipher.init(Cipher.ENCRYPT_MODE, keySpec, ivSpec)
+        val ivBytes = ByteArray(12) // 12-byte IV standard for AES-GCM
+        SecureRandom().nextBytes(ivBytes)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        val gcmSpec = GCMParameterSpec(128, ivBytes)
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey, gcmSpec)
         val encryptedBytes = cipher.doFinal(rawJson.toByteArray(StandardCharsets.UTF_8))
 
         val resultObj = JSONObject()
+        resultObj.put("version", 2)
+        resultObj.put("cipher", "AES-256-GCM")
+        resultObj.put("kdf", "PBKDF2WithHmacSHA256")
+        resultObj.put("iterations", iterations)
+        resultObj.put("salt", Base64.encodeToString(saltBytes, Base64.NO_WRAP))
         resultObj.put("iv", Base64.encodeToString(ivBytes, Base64.NO_WRAP))
         resultObj.put("data", Base64.encodeToString(encryptedBytes, Base64.NO_WRAP))
         resultObj.toString()
     }
 
-    // --- Import Encrypted Backup ---
+    // --- Import Encrypted Backup (Supports v2 AES-256-GCM and legacy v1 AES-CBC) ---
     suspend fun importEncryptedBackup(encryptedPayload: String, passphrase: String): Boolean = withContext(Dispatchers.IO) {
         try {
             val pkg = JSONObject(encryptedPayload)
-            val ivBytes = Base64.decode(pkg.getString("iv"), Base64.DEFAULT)
-            val dataBytes = Base64.decode(pkg.getString("data"), Base64.DEFAULT)
+            val jsonString = if (pkg.has("salt") || pkg.optInt("version", 1) >= 2) {
+                // Version 2: PBKDF2WithHmacSHA256 + AES-256-GCM
+                val saltBytes = Base64.decode(pkg.getString("salt"), Base64.DEFAULT)
+                val ivBytes = Base64.decode(pkg.getString("iv"), Base64.DEFAULT)
+                val dataBytes = Base64.decode(pkg.getString("data"), Base64.DEFAULT)
+                val iterations = pkg.optInt("iterations", 100_000)
 
-            val keyBytes = passphrase.padEnd(32, '*').substring(0, 32).toByteArray(StandardCharsets.UTF_8)
-            val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
-            val keySpec = SecretKeySpec(keyBytes, "AES")
-            val ivSpec = IvParameterSpec(ivBytes)
-            cipher.init(Cipher.DECRYPT_MODE, keySpec, ivSpec)
-            val decryptedBytes = cipher.doFinal(dataBytes)
-            val jsonString = String(decryptedBytes, StandardCharsets.UTF_8)
+                val keySpec = PBEKeySpec(passphrase.toCharArray(), saltBytes, iterations, 256)
+                val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+                val secretKey = SecretKeySpec(factory.generateSecret(keySpec).encoded, "AES")
+
+                val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+                val gcmSpec = GCMParameterSpec(128, ivBytes)
+                cipher.init(Cipher.DECRYPT_MODE, secretKey, gcmSpec)
+                val decryptedBytes = cipher.doFinal(dataBytes)
+                String(decryptedBytes, StandardCharsets.UTF_8)
+            } else {
+                // Version 1 Legacy Fallback: AES-CBC with padded passphrase
+                val ivBytes = Base64.decode(pkg.getString("iv"), Base64.DEFAULT)
+                val dataBytes = Base64.decode(pkg.getString("data"), Base64.DEFAULT)
+                val keyBytes = passphrase.padEnd(32, '*').substring(0, 32).toByteArray(StandardCharsets.UTF_8)
+                val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+                val keySpec = SecretKeySpec(keyBytes, "AES")
+                val ivSpec = IvParameterSpec(ivBytes)
+                cipher.init(Cipher.DECRYPT_MODE, keySpec, ivSpec)
+                val decryptedBytes = cipher.doFinal(dataBytes)
+                String(decryptedBytes, StandardCharsets.UTF_8)
+            }
 
             val root = JSONObject(jsonString)
 

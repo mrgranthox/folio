@@ -93,7 +93,7 @@ fun AnalyticsScreen(
         state.filteredTransactions.filter { !it.isIncome }
     }
     val totalPeriodOutflow = remember(filteredOutflows) {
-        filteredOutflows.sumOf { it.amount }
+        filteredOutflows.sumOf { abs(it.amount) }
     }
     val outflowCount = remember(filteredOutflows) {
         filteredOutflows.size
@@ -105,7 +105,7 @@ fun AnalyticsScreen(
         filteredOutflows
             .groupBy { it.counterparty.trim().ifBlank { "Unknown Payee" } }
             .map { (merchant, txList) ->
-                val total = txList.sumOf { it.amount }
+                val total = txList.sumOf { abs(it.amount) }
                 val count = txList.size
                 val avg = if (count > 0) total / count else 0.0
                 Triple(merchant, total, Pair(count, avg))
@@ -115,7 +115,7 @@ fun AnalyticsScreen(
     }
 
     // Payment Rail Share
-    val railSpendList = remember(filteredOutflows, state.accounts) {
+    val railSpendList = remember(filteredOutflows, state.accounts, totalPeriodOutflow) {
         val denom = totalPeriodOutflow.coerceAtLeast(0.01)
         filteredOutflows
             .groupBy { tx ->
@@ -123,8 +123,8 @@ fun AnalyticsScreen(
                 acc?.name ?: tx.accountRail ?: "Mobile Money"
             }
             .map { (railName, txs) ->
-                val total = txs.sumOf { it.amount }
-                val pct = (total / denom).toFloat()
+                val total = txs.sumOf { abs(it.amount) }
+                val pct = (total / denom).toFloat().coerceIn(0f, 1f)
                 Triple(railName, total, pct)
             }
             .sortedByDescending { it.second }
@@ -138,10 +138,11 @@ fun AnalyticsScreen(
         filteredOutflows.forEach { tx ->
             calendar.timeInMillis = tx.timestamp
             val dow = calendar.get(Calendar.DAY_OF_WEEK)
+            val mag = abs(tx.amount)
             if (dow == Calendar.SATURDAY || dow == Calendar.SUNDAY) {
-                weekend += tx.amount
+                weekend += mag
             } else {
-                weekday += tx.amount
+                weekday += mag
             }
         }
         Pair(weekday, weekend)
@@ -691,8 +692,8 @@ fun AnalyticsScreen(
                                 )
                                 Spacer(modifier = Modifier.height(10.dp))
                                 val totalRhythm = (weekdaySpend + weekendSpend).coerceAtLeast(0.01)
-                                val weekdayPct = (weekdaySpend / totalRhythm).toFloat()
-                                val weekendPct = (weekendSpend / totalRhythm).toFloat()
+                                val weekdayPct = (weekdaySpend / totalRhythm).toFloat().coerceIn(0f, 1f)
+                                val weekendPct = (weekendSpend / totalRhythm).toFloat().coerceIn(0f, 1f)
 
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),

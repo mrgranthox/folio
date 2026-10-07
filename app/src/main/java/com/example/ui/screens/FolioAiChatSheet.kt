@@ -201,7 +201,7 @@ fun FolioAiChatSheet(
                                 color = MaterialTheme.colorScheme.surfaceContainerHigh
                             ) {
                                 Text(
-                                    text = "gemini-3.5-flash",
+                                    text = "gemini-2.5-flash",
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
                                     color = MaterialTheme.colorScheme.primary

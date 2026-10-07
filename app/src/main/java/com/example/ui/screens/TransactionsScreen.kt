@@ -21,7 +21,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -185,6 +187,90 @@ fun TransactionsScreen(
                     }
                 }
 
+                // Account filter
+                item {
+                    var accountMenuExpanded by remember { mutableStateOf(false) }
+                    val selectedAccount = state.accounts.firstOrNull { it.id == state.selectedAccountFilter }
+                    Box {
+                        FilterChip(
+                            selected = state.selectedAccountFilter != null,
+                            onClick = { accountMenuExpanded = true },
+                            label = { Text(selectedAccount?.name ?: "All Accounts", fontSize = 12.sp) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.CreditCard,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        DropdownMenu(
+                            expanded = accountMenuExpanded,
+                            onDismissRequest = { accountMenuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("All Accounts") },
+                                onClick = {
+                                    onAccountFilterChange(null)
+                                    accountMenuExpanded = false
+                                }
+                            )
+                            state.accounts.forEach { acc ->
+                                DropdownMenuItem(
+                                    text = { Text(acc.name) },
+                                    onClick = {
+                                        onAccountFilterChange(acc.id)
+                                        accountMenuExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Category filter
+                item {
+                    var categoryMenuExpanded by remember { mutableStateOf(false) }
+                    val selectedCategory = state.categories.firstOrNull { it.id == state.selectedCategoryFilter }
+                    Box {
+                        FilterChip(
+                            selected = state.selectedCategoryFilter != null,
+                            onClick = { categoryMenuExpanded = true },
+                            label = { Text(selectedCategory?.name ?: "All Categories", fontSize = 12.sp) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Category,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        DropdownMenu(
+                            expanded = categoryMenuExpanded,
+                            onDismissRequest = { categoryMenuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("All Categories") },
+                                onClick = {
+                                    onCategoryFilterChange(null)
+                                    categoryMenuExpanded = false
+                                }
+                            )
+                            state.categories.forEach { cat ->
+                                DropdownMenuItem(
+                                    text = { Text(cat.name) },
+                                    onClick = {
+                                        onCategoryFilterChange(cat.id)
+                                        categoryMenuExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // Direction filters
                 item {
                     FilterChip(
@@ -265,102 +351,127 @@ fun TransactionsScreen(
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp, top = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    grouped.forEach { (dateMillis, txList) ->
-                        item(key = "header-$dateMillis") {
-                            val totalDayNet = txList.sumOf { it.amount }
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 10.dp, bottom = 4.dp, start = 4.dp, end = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = headerDateFormat.format(Date(dateMillis)),
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = "Day Net: ${if (totalDayNet >= 0) "+" else "-"} ${CurrencyUtils.format(abs(totalDayNet))}",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                    color = if (totalDayNet >= 0) CreditGreen else DebitRed
-                                )
-                            }
+                    val isAmountSorted = state.selectedSort == SortOrder.AMOUNT_DESC || state.selectedSort == SortOrder.AMOUNT_ASC
+
+                    if (isAmountSorted) {
+                        items(state.filteredTransactions, key = { it.id }) { tx ->
+                            TransactionCardItem(
+                                tx = tx,
+                                timeFormat = timeFormat,
+                                onClick = { onTransactionClick(tx) }
+                            )
                         }
-
-                        items(txList, key = { it.id }) { tx ->
-                            val isIncome = tx.isIncome
-                            val amountColor = if (isIncome) CreditGreen else DebitRed
-
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onTransactionClick(tx) },
-                                shape = RoundedCornerShape(14.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainer
-                                ),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-                            ) {
+                    } else {
+                        grouped.forEach { (dateMillis, txList) ->
+                            item(key = "header-$dateMillis") {
+                                val totalDayNet = txList.sumOf { it.amount }
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                        .padding(top = 10.dp, bottom = 4.dp, start = 4.dp, end = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    CategoryIconBadge(
-                                        categoryName = tx.categoryName ?: "General",
-                                        colorHex = tx.categoryColor,
-                                        size = 38.dp,
-                                        iconSize = 18.dp
+                                    Text(
+                                        text = headerDateFormat.format(Date(dateMillis)),
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-
-                                    Spacer(modifier = Modifier.width(12.dp))
-
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = tx.counterparty,
-                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text(
-                                            text = "${tx.accountRail ?: "Payment"} · ${timeFormat.format(Date(tx.timestamp))}${if (!tx.externalRef.isNullOrBlank()) " · Ref: ${tx.externalRef}" else ""}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-
-                                    Column(horizontalAlignment = Alignment.End) {
-                                        Text(
-                                            text = "${if (isIncome) "+" else "-"} ${CurrencyUtils.format(abs(tx.amount), tx.currency)}",
-                                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                            color = amountColor
-                                        )
-                                        if (tx.sourceMethod == "ocr") {
-                                            Text(
-                                                text = "OCR Scanned",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                        } else if (!tx.notes.isNullOrBlank()) {
-                                            Text(
-                                                text = tx.notes,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                    }
+                                    Text(
+                                        text = "Day Net: ${if (totalDayNet >= 0) "+" else "-"} ${CurrencyUtils.format(abs(totalDayNet), state.preferredCurrency)}",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                        color = if (totalDayNet >= 0) CreditGreen else DebitRed
+                                    )
                                 }
+                            }
+
+                            items(txList, key = { it.id }) { tx ->
+                                TransactionCardItem(
+                                    tx = tx,
+                                    timeFormat = timeFormat,
+                                    onClick = { onTransactionClick(tx) }
+                                )
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TransactionCardItem(
+    tx: TransactionEntity,
+    timeFormat: SimpleDateFormat,
+    onClick: () -> Unit
+) {
+    val isIncome = tx.isIncome
+    val amountColor = if (isIncome) CreditGreen else DebitRed
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CategoryIconBadge(
+                categoryName = tx.categoryName ?: "General",
+                colorHex = tx.categoryColor,
+                size = 38.dp,
+                iconSize = 18.dp
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = tx.counterparty,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "${tx.accountRail ?: "Payment"} · ${timeFormat.format(Date(tx.timestamp))}${if (!tx.externalRef.isNullOrBlank()) " · Ref: ${tx.externalRef}" else ""}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = "${if (isIncome) "+" else "-"} ${CurrencyUtils.format(abs(tx.amount), tx.currency)}",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = amountColor
+                )
+                if (tx.sourceMethod == "ocr") {
+                    Text(
+                        text = "OCR Scanned",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else if (!tx.notes.isNullOrBlank()) {
+                    Text(
+                        text = tx.notes,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }

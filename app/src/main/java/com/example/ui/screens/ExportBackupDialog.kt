@@ -93,7 +93,7 @@ fun ExportBackupDialog(
 
     // Cloud Sync state per Screen 18
     var isGoogleDriveConnected by remember { mutableStateOf(false) }
-    var isIcloudConnected by remember { mutableStateOf(false) }
+    var isLocalStorageEnabled by remember { mutableStateOf(true) }
     var lastSyncTimestamp by remember { mutableStateOf(System.currentTimeMillis() - 1800000) } // 30 min ago
 
     val timeFormat = SimpleDateFormat("MMM dd, yyyy · HH:mm", Locale.US)
@@ -357,28 +357,28 @@ fun ExportBackupDialog(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Apple iCloud Drive OAuth button
+                        // Local Device Storage
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column {
-                                Text("Apple iCloud Drive", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold))
+                                Text("Local Device Storage", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold))
                                 Text(
-                                    text = if (isIcloudConnected) "Connected · CloudKit Container" else "Not connected",
+                                    text = if (isLocalStorageEnabled) "Active · Documents/FolioBackups" else "Disabled",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (isIcloudConnected) CreditGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (isLocalStorageEnabled) CreditGreen else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                             OutlinedButton(
                                 onClick = {
-                                    isIcloudConnected = !isIcloudConnected
-                                    if (isIcloudConnected) lastSyncTimestamp = System.currentTimeMillis()
+                                    isLocalStorageEnabled = !isLocalStorageEnabled
+                                    if (isLocalStorageEnabled) lastSyncTimestamp = System.currentTimeMillis()
                                 },
                                 shape = RoundedCornerShape(10.dp)
                             ) {
-                                Text(if (isIcloudConnected) "Disconnect" else "Connect")
+                                Text(if (isLocalStorageEnabled) "Configured" else "Enable")
                             }
                         }
                     }

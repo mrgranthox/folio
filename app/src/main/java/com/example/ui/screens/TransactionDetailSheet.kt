@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -16,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -24,7 +26,10 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DocumentScanner
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.Payment
+import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
@@ -39,6 +44,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -52,10 +58,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.data.model.CategoryEntity
 import com.example.data.model.TransactionEntity
 import com.example.ui.components.CategoryIconBadge
@@ -76,9 +85,11 @@ fun TransactionDetailSheet(
     sheetState: SheetState,
     onDismiss: () -> Unit,
     onUpdateCategory: ((TransactionEntity, CategoryEntity) -> Unit)? = null,
+    onUpdateTransaction: ((TransactionEntity) -> Unit)? = null,
     onDelete: (String) -> Unit
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showEditDialog by remember { mutableStateOf(false) }
     var currentCategoryId by remember { mutableStateOf(transaction.categoryId) }
     val fullDateFormat = SimpleDateFormat("EEEE, MMMM dd, yyyy · HH:mm:ss", Locale.US)
     val isIncome = transaction.isIncome
@@ -107,12 +118,17 @@ fun TransactionDetailSheet(
                     Icon(Icons.Default.Close, contentDescription = "Close")
                 }
                 Text(
-                    text = "Expense Details",
+                    text = if (isIncome) "Income Details" else "Expense Details",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                IconButton(onClick = { showDeleteConfirm = true }) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = DebitRed)
+                Row {
+                    IconButton(onClick = { showEditDialog = true }) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit Transaction", tint = MaterialTheme.colorScheme.primary)
+                    }
+                    IconButton(onClick = { showDeleteConfirm = true }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = DebitRed)
+                    }
                 }
             }
 
@@ -169,6 +185,39 @@ fun TransactionDetailSheet(
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             color = if (transaction.isVerified) PrimaryGreen else Color(0xFFF59E0B)
                         )
+                    }
+                }
+            }
+
+            // Optional Receipt Photo Card
+            if (!transaction.receiptImagePath.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(14.dp))
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        AsyncImage(
+                            model = transaction.receiptImagePath,
+                            contentDescription = "Receipt Attachment",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .background(Color.Black.copy(alpha = 0.65f))
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Receipt, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Receipt Image Attached", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
                     }
                 }
             }
@@ -258,6 +307,14 @@ fun TransactionDetailSheet(
                             value = transaction.externalRef
                         )
                     }
+                    if (!transaction.notes.isNullOrBlank()) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                        DetailRow(
+                            icon = Icons.Default.Notes,
+                            label = "Notes",
+                            value = transaction.notes
+                        )
+                    }
                 }
             }
 
@@ -272,7 +329,11 @@ fun TransactionDetailSheet(
             ) {
                 Icon(Icons.Default.Delete, contentDescription = null, tint = DebitRed, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Delete Expense", color = DebitRed, fontWeight = FontWeight.SemiBold)
+                Text(
+                    text = if (isIncome) "Delete Income" else "Delete Expense",
+                    color = DebitRed,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -282,8 +343,8 @@ fun TransactionDetailSheet(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete Expense Record?") },
-            text = { Text("Are you sure you want to delete this expense record from your ledger?") },
+            title = { Text(if (isIncome) "Delete Income Record?" else "Delete Expense Record?") },
+            text = { Text("Are you sure you want to delete this ${if (isIncome) "income" else "expense"} record from your ledger?") },
             confirmButton = {
                 TextButton(onClick = {
                     onDelete(transaction.id)
@@ -295,6 +356,66 @@ fun TransactionDetailSheet(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showEditDialog) {
+        var editCounterparty by remember { mutableStateOf(transaction.counterparty) }
+        var editAmount by remember { mutableStateOf(abs(transaction.amount).toString()) }
+        var editNotes by remember { mutableStateOf(transaction.notes ?: "") }
+
+        AlertDialog(
+            onDismissRequest = { showEditDialog = false },
+            title = { Text("Edit ${if (isIncome) "Income" else "Expense"}") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = editCounterparty,
+                        onValueChange = { editCounterparty = it },
+                        label = { Text("Counterparty / Payee") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = editAmount,
+                        onValueChange = { input ->
+                            val filtered = input.filter { it.isDigit() || it == '.' }
+                            if (filtered.count { it == '.' } <= 1) editAmount = filtered
+                        },
+                        label = { Text("Amount (${transaction.currency})") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = editNotes,
+                        onValueChange = { editNotes = it },
+                        label = { Text("Notes (optional)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val parsedAmt = editAmount.toDoubleOrNull() ?: abs(transaction.amount)
+                    val signedAmt = if (isIncome) abs(parsedAmt) else -abs(parsedAmt)
+                    val updated = transaction.copy(
+                        counterparty = editCounterparty.ifBlank { transaction.counterparty },
+                        amount = signedAmt,
+                        notes = editNotes.ifBlank { null }
+                    )
+                    onUpdateTransaction?.invoke(updated)
+                    showEditDialog = false
+                }) {
+                    Text("Save Changes", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditDialog = false }) {
                     Text("Cancel")
                 }
             }

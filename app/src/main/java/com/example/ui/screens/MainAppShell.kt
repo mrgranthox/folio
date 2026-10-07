@@ -196,6 +196,17 @@ fun MainAppShell(
                             categoryId = defaultCat
                         )
                     },
+                    onConvertUnrecognizedWithDetails = { unrecId, payee, amt, curr, isInc, accId, catId ->
+                        viewModel.convertUnrecognizedToTransaction(
+                            unrecId = unrecId,
+                            counterparty = payee,
+                            amount = amt,
+                            currency = curr,
+                            isIncome = isInc,
+                            accountId = accId,
+                            categoryId = catId
+                        )
+                    },
                     onDismissUnrecognized = { viewModel.dismissUnrecognized(it) }
                 )
                 4 -> SettingsScreen(
@@ -362,7 +373,7 @@ fun MainAppShell(
             categories = state.categories,
             sheetState = addExpenseSheetState,
             onDismiss = { showAddExpenseSheet = false },
-            onSave = { payee, amt, curr, isInc, accId, catId, notes ->
+            onSave = { payee, amt, curr, isInc, accId, catId, notes, timestamp ->
                 viewModel.addTransaction(
                     counterparty = payee,
                     amount = amt,
@@ -370,7 +381,8 @@ fun MainAppShell(
                     isIncome = isInc,
                     accountId = accId,
                     categoryId = catId,
-                    notes = notes
+                    notes = notes,
+                    timestamp = timestamp
                 )
             },
             onScanReceiptClicked = { showOcrScannerSheet = true }
@@ -385,6 +397,10 @@ fun MainAppShell(
             onDismiss = { selectedTransactionForDetail = null },
             onUpdateCategory = { item, newCat ->
                 viewModel.updateTransactionCategory(item, newCat)
+            },
+            onUpdateTransaction = { updated ->
+                viewModel.updateTransaction(updated)
+                selectedTransactionForDetail = updated
             },
             onDelete = { id ->
                 viewModel.deleteTransaction(id)
@@ -431,6 +447,9 @@ fun MainAppShell(
             onDismiss = { showQuickPasteSmsSheet = false },
             onIngest = { rawSms ->
                 viewModel.simulateSmsIngest("MobileMoney", rawSms)
+            },
+            onIngestWithDetails = { rawSms, accId, catId ->
+                viewModel.simulateSmsIngest("MobileMoney", rawSms, accId, catId)
             }
         )
     }

@@ -334,9 +334,9 @@ private fun ZeroKnowledgePrivacyScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "1. No Vendor Servers: All database files, parsed SMS alerts, and camera scans reside exclusively in your sandboxed SQLite database on this physical phone.\n\n" +
-                                "2. No Telemetry or Ad Trackers: This application contains zero analytics trackers, telemetry daemons, or behavioral profiling code.\n\n" +
-                                "3. Sovereign Backups: Any export or cloud sync runs directly through your personal cloud drive (OAuth 2.0) with zero intermediary access.",
+                        text = "1. Local-First Sovereignty: All transaction ledgers, accounts, and SMS alerts reside exclusively in your local sandboxed SQLite database on this device.\n\n" +
+                                "2. Zero Hidden Telemetry: Folio contains no ad-trackers, background analytics daemons, or behavioral profiling services.\n\n" +
+                                "3. Opt-In Intelligence: Automated MoMo/bank parsing executes 100% offline. Cloud AI (Gemini Assistant & OCR) operates solely when you explicitly supply an API key and trigger those actions.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 20.sp

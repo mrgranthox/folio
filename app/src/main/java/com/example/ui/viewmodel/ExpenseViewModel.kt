@@ -197,10 +197,10 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         val totalMonthlyBudget = categories.mapNotNull { it.budgetLimit }.sum()
         val budgetUsedPct = if (totalMonthlyBudget > 0) (thisMonthOutflow / totalMonthlyBudget) else 0.0
 
-        // Account spent map (tracks how much was spent from each payment method/rail)
+        // Account spent map (tracks how much was spent this month from each payment method/rail)
         val accountSpendMap = mutableMapOf<String, Double>()
         for (acc in accounts) {
-            val spent = abs(transactions.filter { it.accountId == acc.id && it.amount < 0 }.sumOf { it.amount })
+            val spent = abs(thisMonthTransactions.filter { it.accountId == acc.id && it.amount < 0 }.sumOf { it.amount })
             accountSpendMap[acc.id] = spent
         }
 
@@ -459,6 +459,13 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun updateTransaction(tx: TransactionEntity) {
+        viewModelScope.launch {
+            repository.updateTransaction(tx)
+            _snackbarEvent.emit("Transaction updated.")
+        }
+    }
+
     // --- Accounts & Categories Operations ---
     fun addAccount(name: String, type: String, balance: Double, currency: String) {
         viewModelScope.launch {
@@ -527,9 +534,14 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun simulateSmsIngest(sender: String, body: String) {
+    fun simulateSmsIngest(
+        sender: String,
+        body: String,
+        overrideAccountId: String? = null,
+        overrideCategoryId: String? = null
+    ) {
         viewModelScope.launch {
-            val (outcome, msg) = repository.ingestSms(sender, body)
+            val (outcome, msg) = repository.ingestSms(sender, body, overrideAccountId, overrideCategoryId)
             _snackbarEvent.emit(msg)
         }
     }

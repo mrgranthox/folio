@@ -89,6 +89,7 @@ fun QuickPasteSmsDialog(
     sheetState: SheetState,
     onDismiss: () -> Unit,
     onIngest: (String) -> Unit,
+    onIngestWithDetails: ((rawSms: String, accountId: String?, categoryId: String?) -> Unit)? = null,
     accounts: List<AccountEntity> = emptyList(),
     categories: List<CategoryEntity> = emptyList()
 ) {
@@ -143,6 +144,13 @@ fun QuickPasteSmsDialog(
                 } else false
             } ?: accounts.firstOrNull()
         }
+    }
+
+    var userSelectedAccountId by remember(autoMatchedAccount) {
+        mutableStateOf(autoMatchedAccount?.id)
+    }
+    var userSelectedCategoryId by remember(autoMatchedCategory) {
+        mutableStateOf(autoMatchedCategory?.id)
     }
 
     ModalBottomSheet(
@@ -591,17 +599,33 @@ fun QuickPasteSmsDialog(
                                             icon = Icons.Default.Numbers
                                         )
                                     }
+                                    val chosenAccName = accounts.firstOrNull { it.id == userSelectedAccountId }?.name ?: autoMatchedAccount?.name ?: parsedResult.provider
                                     DetailItemRow(
                                         label = "Assigned Wallet Rail",
-                                        value = autoMatchedAccount?.name ?: parsedResult.provider,
+                                        value = chosenAccName,
                                         icon = Icons.Default.CreditCard
                                     )
-                                    autoMatchedCategory?.let { cat ->
-                                        DetailItemRow(
-                                            label = "Auto-Matched Category",
-                                            value = cat.name,
-                                            icon = Icons.Default.Category
-                                        )
+                                    val chosenCatName = categories.firstOrNull { it.id == userSelectedCategoryId }?.name ?: autoMatchedCategory?.name ?: "General"
+                                    DetailItemRow(
+                                        label = "Assigned Category",
+                                        value = chosenCatName,
+                                        icon = Icons.Default.Category
+                                    )
+                                    if (categories.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        LazyRow(
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            items(categories) { cat ->
+                                                val isSelected = cat.id == userSelectedCategoryId
+                                                FilterChip(
+                                                    selected = isSelected,
+                                                    onClick = { userSelectedCategoryId = cat.id },
+                                                    label = { Text(cat.name, fontSize = 11.sp) }
+                                                )
+                                            }
+                                        }
                                     }
                                     parsedResult.fee?.let { fee ->
                                         DetailItemRow(
@@ -636,7 +660,11 @@ fun QuickPasteSmsDialog(
                 Button(
                     onClick = {
                         if (smsText.isNotBlank()) {
-                            onIngest(smsText)
+                            if (onIngestWithDetails != null) {
+                                onIngestWithDetails(smsText, userSelectedAccountId, userSelectedCategoryId)
+                            } else {
+                                onIngest(smsText)
+                            }
                             isConfirmedAndSaved = true
                         }
                     },
