@@ -284,8 +284,8 @@ fun MainAppShell(
                         .widthIn(max = 520.dp),
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.surfaceContainer,
-                    tonalElevation = 3.dp,
-                    shadowElevation = 8.dp
+                    tonalElevation = 0.dp,
+                    shadowElevation = 0.dp
                 ) {
                     Row(
                         modifier = Modifier
