@@ -69,5 +69,48 @@ class SmsParserEngineTest {
         val result = parser.parse("MTN Promo", sms)
 
         assertFalse("Promotional messages should not be marked as financial", result.isFinancial)
+        assertTrue(result.isPromotional)
+    }
+
+    @Test
+    fun parsePromotionalAdWithMonetaryAmountBlocked() {
+        val sms = "Win GHS 500 in the MoMo promo! Dial *170# now to play. Terms and conditions apply."
+        val result = parser.parse("MobileMoney", sms)
+
+        assertFalse("Promotional adverts with monetary amounts must be rejected", result.isFinancial)
+        assertTrue(result.isPromotional)
+    }
+
+    @Test
+    fun parseThirdPartyMarketingBureauBlocked() {
+        val sms = "paying 70 cedis out of for a certificate at our office. Call 0244000000."
+        val result = parser.parse("TransAfrica Bureau", sms)
+
+        assertFalse("Third party bureau messages without transaction proof must be rejected", result.isFinancial)
+    }
+
+    @Test
+    fun parseBankCashbackMarketingBlocked() {
+        val sms = "Enjoy GHS 50 cashback when you use your Ecobank card this weekend! T&Cs apply."
+        val result = parser.parse("Ecobank", sms)
+
+        assertFalse("Bank marketing solicitations must be rejected", result.isFinancial)
+        assertTrue(result.isPromotional)
+    }
+
+    @Test
+    fun parseBankMaintenanceNoticeBlocked() {
+        val sms = "Dear Customer, please note that Ecobank systems will undergo scheduled maintenance this Sunday."
+        val result = parser.parse("Ecobank", sms)
+
+        assertFalse("Bank service maintenance notices must be rejected", result.isFinancial)
+    }
+
+    @Test
+    fun parseLoanSolicitationBlocked() {
+        val sms = "Qualify for an instant loan of GHS 1,500. Apply now via *170#."
+        val result = parser.parse("MobileMoney", sms)
+
+        assertFalse("Loan solicitations without execution proof must be rejected", result.isFinancial)
     }
 }

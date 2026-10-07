@@ -25,6 +25,8 @@ enum class SmsTransactionSubtype {
 
 data class ParsedSmsResult(
     val isFinancial: Boolean,
+    val isPromotional: Boolean = false,
+    val rejectionReason: String? = null,
     val externalRef: String? = null,
     val amount: Double? = null,
     val fee: Double? = null,
@@ -97,6 +99,125 @@ data class ParsedSmsResult(
 }
 
 class SmsParserEngine {
+
+    companion object {
+        // Recognized Ghanaian financial & telecom rails
+        val AUTHORIZED_MOMO_SENDERS = listOf(
+            "mobilemoney", "momo", "mtn", "170", "mtn momo", "mtnmomo"
+        )
+        val AUTHORIZED_TELECEL_SENDERS = listOf(
+            "telecel", "vodafone", "t-cash", "tcash", "v-cash", "vcash", "telecel cash", "telecelcash"
+        )
+        val AUTHORIZED_AT_SENDERS = listOf(
+            "airteltigo", "at money", "atmoney", "airteltigomoney"
+        )
+        val AUTHORIZED_BANK_SENDERS = listOf(
+            "ecobank", "stanbic", "gcb", "gtbank", "zenith", "absa", "fidelity",
+            "calbank", "access", "standard chartered", "stanchart", "fnb", "uba",
+            "republic", "cbg", "omnibsic", "prudential", "first atlantic", "boa", "bank"
+        )
+        val AUTHORIZED_UTILITY_SENDERS = listOf(
+            "ecg", "gwcl", "zeepay", "g-money", "gmoney"
+        )
+
+        val PROMOTIONAL_OR_MANAGEMENT_KEYWORDS = listOf(
+            // Commercial promotions / lotteries / offers
+            "win", "winner", "promo", "promotion", "bonus", "double bonus", "mashup",
+            "dial *", "dial #", "subscribe", "subscribing", "subscription",
+            "stand a chance", "congratulations", "lucky", "cashback", "reward points", "loyalty points",
+            "free gb", "data bundle offer", "buy bundle", "bundle offer", "special offer",
+            "discount", "coupon", "voucher", "enjoy up to", "get up to", "airtime offer",
+            "spin & win", "spin and win", "raffle", "jackpot", "play now",
+
+            // Solicitations, loans, certificates, billing reminders (money hasn't actually moved)
+            "apply for", "apply now", "qualify for", "get a loan", "quick loan", "loan offer",
+            "borrow up to", "pay only", "out of for", "certificate", "cost is",
+            "charges apply", "admission", "tuition fee", "fee is",
+            "your loan balance", "repay your loan", "repayment is due",
+
+            // Management, Security notices, OTPs, Systems
+            "terms and conditions", "terms & conditions", "t&cs apply", "please note that",
+            "scheduled maintenance", "system upgrade", "service interruption",
+            "scam alert", "fraud alert", "do not share your pin", "never share your pin",
+            "otp", "one-time password", "verification code", "secret code",
+            "pin reset", "sim registration", "dear customer",
+            "welcome to mtn", "welcome to telecel", "welcome to ecobank"
+        )
+    }
+
+    fun isAuthorizedFinancialSender(sender: String, body: String): Boolean {
+        val s = sender.lowercase(Locale.ROOT).trim()
+        val b = body.lowercase(Locale.ROOT)
+
+        if (AUTHORIZED_MOMO_SENDERS.any { s.contains(it) }) return true
+        if (AUTHORIZED_TELECEL_SENDERS.any { s.contains(it) }) return true
+        if (AUTHORIZED_AT_SENDERS.any { s.contains(it) }) return true
+        if (AUTHORIZED_BANK_SENDERS.any { s.contains(it) }) return true
+        if (AUTHORIZED_UTILITY_SENDERS.any { s.contains(it) }) return true
+
+        // If sender is unknown/empty/generic, check for unambiguous cryptographic/financial header in body:
+        val hasExplicitMoMoHeader = b.contains("financial transaction id") ||
+                b.contains("mobilemoney") ||
+                b.contains("telecel cash balance") ||
+                b.contains("at money balance") ||
+                (b.contains("payment made for") && b.contains("current balance")) ||
+                (b.contains("cash out of") && b.contains("agent")) ||
+                (b.contains("cash in received for") && b.contains("reference:"))
+        val hasExplicitBankHeader = (b.contains("acct:") || b.contains("acct **") || b.contains("acct no")) &&
+                (b.contains("avail bal") || b.contains("bal:") || b.contains("balance:") || b.contains("pos purchase") || b.contains("atm wdl"))
+
+        return hasExplicitMoMoHeader || hasExplicitBankHeader
+    }
+
+    fun isPromotionalOrManagementMessage(body: String, sender: String): Boolean {
+        val lower = body.lowercase(Locale.ROOT)
+        val lowerSender = sender.lowercase(Locale.ROOT)
+
+        if (lowerSender.contains("promo") || lowerSender.contains("offer") || lowerSender.contains("marketing") || lowerSender.contains("ad")) {
+            return true
+        }
+
+        return PROMOTIONAL_OR_MANAGEMENT_KEYWORDS.any { lower.contains(it) }
+    }
+
+    fun hasVerifiableTransactionProof(
+        cleanBody: String,
+        lowerBody: String,
+        externalRef: String?,
+        endingBalance: Double?,
+        subType: SmsTransactionSubtype
+    ): Boolean {
+        // Proof 1: Official Financial Transaction ID / Reference (5+ chars)
+        if (!externalRef.isNullOrBlank() && externalRef.length >= 5) {
+            return true
+        }
+
+        // Proof 2: Ending Balance Audit Statement
+        if (endingBalance != null && endingBalance >= 0) {
+            return true
+        }
+
+        // Proof 3: Definite Past-Tense Execution Grammar from Official Financial Entity
+        val hasDefiniteExecutionVerb = lowerBody.contains("payment made for") ||
+                lowerBody.contains("payment of") ||
+                lowerBody.contains("you have received") ||
+                lowerBody.contains("cash out of") ||
+                lowerBody.contains("cash in received") ||
+                lowerBody.contains("cash in of") ||
+                lowerBody.contains("you have transferred") ||
+                lowerBody.contains("transferred ghs") ||
+                lowerBody.contains("transfer of") ||
+                lowerBody.contains("debit alert") ||
+                lowerBody.contains("credit alert") ||
+                lowerBody.contains("was debited with") ||
+                lowerBody.contains("was credited with") ||
+                lowerBody.contains("pos purchase") ||
+                lowerBody.contains("atm wdl") ||
+                lowerBody.contains("use this token") ||
+                lowerBody.contains("recharge token")
+
+        return hasDefiniteExecutionVerb
+    }
 
     fun parse(sender: String, body: String): ParsedSmsResult {
         val cleanBody = body.trim()
@@ -495,10 +616,44 @@ class SmsParserEngine {
             }
         }
 
-        val isFinancial = amount != null && amount > 0
+        // -------------------------------------------------------------
+        // 12. Robust Financial Verification Gate
+        // -------------------------------------------------------------
+        val isAuthorized = isAuthorizedFinancialSender(sender, cleanBody)
+        val isPromo = isPromotionalOrManagementMessage(cleanBody, sender)
+        val hasProof = hasVerifiableTransactionProof(
+            cleanBody = cleanBody,
+            lowerBody = lowerBody,
+            externalRef = externalRef,
+            endingBalance = endingBalance,
+            subType = subType
+        )
+
+        // Strict Financial Transaction Ingestion Rules:
+        // 1. Must contain valid monetary amount > 0
+        // 2. Sender must be an authorized financial provider or utility rail
+        // 3. Must not be promotional or management notices (unless carrying both an authoritative ref AND ending balance)
+        // 4. Must satisfy verifiable financial proof (Transaction ID, Balance statement, or definite execution verb)
+        val isFinancial = when {
+            amount == null || amount <= 0.0 -> false
+            !isAuthorized -> false
+            isPromo && (externalRef == null || endingBalance == null) -> false
+            !hasProof -> false
+            else -> true
+        }
+
+        val rejectionReason = when {
+            amount == null || amount <= 0.0 -> "No monetary amount detected in message"
+            !isAuthorized -> "Sender '$sender' is not a recognized financial institution or payment rail"
+            isPromo && (externalRef == null || endingBalance == null) -> "Message identified as promotional advertisement, bundle offer, or service notice"
+            !hasProof -> "Message lacks mandatory transaction verification proof (no transaction ID, balance, or execution confirmation)"
+            else -> null
+        }
 
         return ParsedSmsResult(
             isFinancial = isFinancial,
+            isPromotional = isPromo,
+            rejectionReason = rejectionReason,
             externalRef = externalRef,
             amount = amount,
             fee = fee,

@@ -43,6 +43,83 @@ class ReconciliationEngine {
         }
 
         // ------------------------------------------------------------------------
+        // TIER 1B: Same-Rail Duplicate Transmission (Network Resend within 10 minutes)
+        // ------------------------------------------------------------------------
+        val sameRailDup = existingTransactions.firstOrNull { t ->
+            if (t.isDeleted) return@firstOrNull false
+            val amountMatch = abs(abs(t.amount) - abs(incoming.amount)) < 0.01
+            val directionMatch = t.direction == incoming.direction
+            val railMatch = !incoming.accountRail.isNullOrBlank() &&
+                    !t.accountRail.isNullOrBlank() &&
+                    incoming.accountRail.equals(t.accountRail, ignoreCase = true)
+            val timeDiffMinutes = abs(incoming.timestamp - t.timestamp).toDouble() / (1000 * 60)
+            if (amountMatch && directionMatch && railMatch && timeDiffMinutes <= 10.0) {
+                val normInc = normalizeMerchant(incoming.counterparty)
+                val normEx = normalizeMerchant(t.counterparty)
+                normInc == normEx || normInc.contains(normEx) || normEx.contains(normInc) ||
+                        calculateJaccardSimilarity(normInc, normEx) >= 0.7
+            } else false
+        }
+        if (sameRailDup != null) {
+            return ReconciliationResult(
+                outcome = ReconciliationOutcome.IDEMPOTENT_SKIP,
+                matchScore = 100,
+                matchFactors = listOf(
+                    "Duplicate SMS retransmission detected on ${incoming.accountRail} within 10 mins (${incoming.counterparty})"
+                )
+            )
+        }
+
+        // ------------------------------------------------------------------------
+        // TIER 1C: Cross-Rail Transfer Duplicate (e.g. MTN MoMo <-> Bank e.g. Ecobank)
+        // ------------------------------------------------------------------------
+        val crossRailDup = existingTransactions.firstOrNull { t ->
+            if (t.isDeleted) return@firstOrNull false
+            val amountMatch = abs(abs(t.amount) - abs(incoming.amount)) < 0.02
+            val timeDiffMinutes = abs(incoming.timestamp - t.timestamp).toDouble() / (1000 * 60)
+            if (!amountMatch || timeDiffMinutes > 15.0) return@firstOrNull false
+
+            val incRail = incoming.accountRail ?: ""
+            val exRail = t.accountRail ?: ""
+
+            val incIsMoMo = isMoMoRail(incRail)
+            val exIsMoMo = isMoMoRail(exRail)
+            val incIsBank = isBankRail(incRail)
+            val exIsBank = isBankRail(exRail)
+
+            val isCrossPair = (incIsMoMo && exIsBank) || (incIsBank && exIsMoMo)
+            if (!isCrossPair) return@firstOrNull false
+
+            val momoTx = if (incIsMoMo) incoming else t
+            val bankTx = if (incIsBank) incoming else t
+
+            val momoText = "${momoTx.counterparty} ${momoTx.notes ?: ""}".lowercase()
+            val bankText = "${bankTx.counterparty} ${bankTx.notes ?: ""} ${bankTx.accountRail ?: ""}".lowercase()
+
+            val bankNames = listOf(
+                "ecobank", "stanbic", "gcb", "gtbank", "zenith", "absa", "fidelity",
+                "calbank", "access", "standard chartered", "fnb", "cbg", "bank"
+            )
+            val momoKeywords = listOf(
+                "momo", "mtn", "mobile money", "telecel", "vodafone", "t-cash", "at money", "wallet"
+            )
+
+            val momoMentionsBank = bankNames.any { momoText.contains(it) }
+            val bankMentionsMoMo = momoKeywords.any { bankText.contains(it) }
+
+            momoMentionsBank || bankMentionsMoMo
+        }
+        if (crossRailDup != null) {
+            return ReconciliationResult(
+                outcome = ReconciliationOutcome.IDEMPOTENT_SKIP,
+                matchScore = 100,
+                matchFactors = listOf(
+                    "Cross-rail transfer duplicate detected between ${incoming.accountRail} and ${crossRailDup.accountRail} for ${incoming.currency} ${abs(incoming.amount)}"
+                )
+            )
+        }
+
+        // ------------------------------------------------------------------------
         // TIER 2: Probabilistic Reconciler (Fuzzy Matching)
         // ------------------------------------------------------------------------
         var highestScore = 0
@@ -185,5 +262,21 @@ class ReconciliationEngine {
         val union = set1.union(set2).size
         if (union == 0) return 0.0
         return intersection.toDouble() / union.toDouble()
+    }
+
+    private fun isMoMoRail(rail: String): Boolean {
+        val r = rail.lowercase()
+        return r.contains("momo") || r.contains("mtn") || r.contains("mobile money") ||
+                r.contains("telecel") || r.contains("vodafone") || r.contains("cash") ||
+                r.contains("airteltigo") || r.contains("at money") || r.contains("wallet")
+    }
+
+    private fun isBankRail(rail: String): Boolean {
+        val r = rail.lowercase()
+        return r.contains("bank") || r.contains("ecobank") || r.contains("stanbic") ||
+                r.contains("gcb") || r.contains("gtbank") || r.contains("zenith") ||
+                r.contains("absa") || r.contains("fidelity") || r.contains("calbank") ||
+                r.contains("access") || r.contains("standard chartered") || r.contains("fnb") ||
+                r.contains("cbg")
     }
 }

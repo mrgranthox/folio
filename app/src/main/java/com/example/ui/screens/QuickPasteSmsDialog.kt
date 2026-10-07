@@ -508,7 +508,11 @@ fun QuickPasteSmsDialog(
                                     ) {
                                         Surface(
                                             shape = RoundedCornerShape(8.dp),
-                                            color = if (parsedResult.isFinancial) CreditGreen.copy(alpha = 0.15f) else WarningAmber.copy(alpha = 0.15f)
+                                            color = when {
+                                                parsedResult.isFinancial -> CreditGreen.copy(alpha = 0.15f)
+                                                parsedResult.isPromotional -> DebitRed.copy(alpha = 0.15f)
+                                                else -> WarningAmber.copy(alpha = 0.15f)
+                                            }
                                         ) {
                                             Row(
                                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -517,14 +521,26 @@ fun QuickPasteSmsDialog(
                                                 Icon(
                                                     imageVector = if (parsedResult.isFinancial) Icons.Default.CheckCircle else Icons.Default.Warning,
                                                     contentDescription = null,
-                                                    tint = if (parsedResult.isFinancial) CreditGreen else WarningAmber,
+                                                    tint = when {
+                                                        parsedResult.isFinancial -> CreditGreen
+                                                        parsedResult.isPromotional -> DebitRed
+                                                        else -> WarningAmber
+                                                    },
                                                     modifier = Modifier.size(13.dp)
                                                 )
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 Text(
-                                                    text = if (parsedResult.isFinancial) "Verified Financial Alert" else "Unrecognized Alert Format",
+                                                    text = when {
+                                                        parsedResult.isFinancial -> "Verified Financial Alert"
+                                                        parsedResult.isPromotional -> "Promotional / Marketing Message"
+                                                        else -> "Unverified Alert Format"
+                                                    },
                                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                                    color = if (parsedResult.isFinancial) CreditGreen else WarningAmber
+                                                    color = when {
+                                                        parsedResult.isFinancial -> CreditGreen
+                                                        parsedResult.isPromotional -> DebitRed
+                                                        else -> WarningAmber
+                                                    }
                                                 )
                                             }
                                         }
@@ -648,12 +664,39 @@ fun QuickPasteSmsDialog(
                     }
                 }
 
+                if (parsedResult != null && !parsedResult.isFinancial) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = parsedResult.rejectionReason ?: "This message is promotional or cannot be verified as an executed financial transaction.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(18.dp))
 
                 // Primary Action Button: Confirm & Save
                 Button(
                     onClick = {
-                        if (smsText.isNotBlank()) {
+                        if (smsText.isNotBlank() && parsedResult?.isFinancial == true) {
                             if (onIngestWithDetails != null) {
                                 onIngestWithDetails(smsText, userSelectedAccountId, userSelectedCategoryId)
                             } else {
@@ -662,7 +705,7 @@ fun QuickPasteSmsDialog(
                             isConfirmedAndSaved = true
                         }
                     },
-                    enabled = smsText.isNotBlank(),
+                    enabled = smsText.isNotBlank() && (parsedResult?.isFinancial == true),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(50.dp),
@@ -674,7 +717,10 @@ fun QuickPasteSmsDialog(
                 ) {
                     Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Confirm & Save Expense", fontWeight = FontWeight.Bold)
+                    Text(
+                        if (parsedResult?.isFinancial == false) "Non-Transactional Message" else "Confirm & Save Expense",
+                        fontWeight = FontWeight.Bold
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))

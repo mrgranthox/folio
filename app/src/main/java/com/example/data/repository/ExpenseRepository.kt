@@ -276,19 +276,25 @@ class ExpenseRepository(context: Context) {
                 }
             }
         } else {
-            val lower = body.lowercase(Locale.ROOT)
-            if (lower.contains("money") || lower.contains("ghs") || lower.contains("gh¢") || lower.contains("payment") || lower.contains("debit")) {
-                val unrec = UnrecognizedMessageEntity(
-                    id = "unrec-${System.currentTimeMillis()}",
-                    sender = sender,
-                    rawBody = body,
-                    timestamp = System.currentTimeMillis()
-                )
-                unrecognizedDao.insert(unrec)
-                Pair(ReconciliationOutcome.QUEUED_FOR_REVIEW, "Alert saved to Unrecognized Inbox for manual review")
-            } else {
-                Pair(ReconciliationOutcome.IDEMPOTENT_SKIP, "Non-financial message ignored")
+            // Filter out promotional ads, marketing solicitations, and unknown third-party messages completely.
+            // Only queue legitimate unparsed messages from authorized financial senders to the Unrecognized Inbox for manual review.
+            val isAuthorizedRail = smsParser.isAuthorizedFinancialSender(sender, body)
+            val isPromo = smsParser.isPromotionalOrManagementMessage(body, sender)
+
+            if (isAuthorizedRail && !isPromo) {
+                val lower = body.lowercase(Locale.ROOT)
+                if (lower.contains("money") || lower.contains("ghs") || lower.contains("gh¢") || lower.contains("payment") || lower.contains("debit") || lower.contains("credit")) {
+                    val unrec = UnrecognizedMessageEntity(
+                        id = "unrec-${System.currentTimeMillis()}",
+                        sender = sender,
+                        rawBody = body,
+                        timestamp = System.currentTimeMillis()
+                    )
+                    unrecognizedDao.insert(unrec)
+                    return@withContext Pair(ReconciliationOutcome.QUEUED_FOR_REVIEW, "Alert saved to Unrecognized Inbox for manual review")
+                }
             }
+            Pair(ReconciliationOutcome.IDEMPOTENT_SKIP, parsed.rejectionReason ?: "Non-financial or promotional message filtered out")
         }
     }
 
