@@ -7,17 +7,41 @@ import java.util.Locale
 import java.util.UUID
 import java.util.regex.Pattern
 
+enum class SmsTransactionSubtype {
+    MERCHANT_PAYMENT,
+    P2P_SENT,
+    P2P_RECEIVED,
+    CASH_OUT,
+    CASH_IN,
+    BILL_RECHARGE,
+    AIRTIME_BUNDLE,
+    BANK_DEBIT,
+    BANK_CREDIT,
+    ATM_WITHDRAWAL,
+    TRANSFER,
+    GENERAL_EXPENSE,
+    GENERAL_INCOME
+}
+
 data class ParsedSmsResult(
     val isFinancial: Boolean,
     val externalRef: String? = null,
     val amount: Double? = null,
+    val fee: Double? = null,
     val currency: String = "GHS",
     val direction: TransactionDirection = TransactionDirection.DEBIT,
+    val subType: SmsTransactionSubtype = SmsTransactionSubtype.GENERAL_EXPENSE,
     val counterparty: String = "Unknown Payee",
+    val counterpartyPhone: String? = null,
+    val meterNumber: String? = null,
+    val rechargeToken: String? = null,
     val endingBalance: Double? = null,
     val timestamp: Long = System.currentTimeMillis(),
     val rawBody: String,
-    val provider: String
+    val provider: String,
+    val suggestedCategory: String? = null,
+    val confidenceScore: Double = 0.95,
+    val isAiParsed: Boolean = false
 ) {
     fun toTransactionEntity(
         accountId: String,
@@ -28,7 +52,26 @@ data class ParsedSmsResult(
     ): TransactionEntity {
         val amt = amount ?: 0.0
         val finalAmount = if (direction == TransactionDirection.DEBIT) -kotlin.math.abs(amt) else kotlin.math.abs(amt)
-        val type = if (direction == TransactionDirection.CREDIT) "Income" else "Expense"
+        val type = when (direction) {
+            TransactionDirection.CREDIT -> "Income"
+            else -> when (subType) {
+                SmsTransactionSubtype.BILL_RECHARGE -> "Bill"
+                SmsTransactionSubtype.P2P_SENT, SmsTransactionSubtype.TRANSFER -> "Transfer"
+                else -> "Expense"
+            }
+        }
+
+        val noteParts = mutableListOf<String>()
+        noteParts.add("Automated ingest via $provider")
+        if (!rechargeToken.isNullOrBlank()) {
+            noteParts.add("Token: $rechargeToken")
+        }
+        if (fee != null && fee > 0) {
+            noteParts.add("Fee: $currency ${String.format(Locale.US, "%.2f", fee)}")
+        }
+        if (!meterNumber.isNullOrBlank()) {
+            noteParts.add("Meter: $meterNumber")
+        }
 
         return TransactionEntity(
             id = UUID.randomUUID().toString(),
@@ -42,7 +85,7 @@ data class ParsedSmsResult(
             timestamp = timestamp,
             counterparty = counterparty,
             sourceMethod = "sms",
-            notes = "Automated ingest via $provider",
+            notes = noteParts.joinToString(" • "),
             isVerified = true,
             isDeleted = false,
             createdAt = System.currentTimeMillis(),
@@ -60,20 +103,33 @@ class SmsParserEngine {
         val lowerBody = cleanBody.lowercase(Locale.ROOT)
         val lowerSender = sender.lowercase(Locale.ROOT)
 
+        // -------------------------------------------------------------
+        // 1. Identify Financial Provider / Channel
+        // -------------------------------------------------------------
         val isMoMo = lowerSender.contains("momo") ||
                 lowerSender.contains("mtn") ||
+                lowerSender.contains("mobilemoney") ||
                 lowerBody.contains("mobilemoney") ||
                 lowerBody.contains("momo") ||
                 lowerBody.contains("financial transaction id")
 
         val isTelecel = lowerSender.contains("telecel") ||
                 lowerSender.contains("vodafone") ||
+                lowerSender.contains("t-cash") ||
+                lowerSender.contains("tcash") ||
+                lowerSender.contains("v-cash") ||
                 lowerBody.contains("telecel cash") ||
+                lowerBody.contains("t-cash") ||
                 lowerBody.contains("v-cash")
 
         val isAt = lowerSender.contains("airteltigo") ||
                 lowerSender.contains("at money") ||
-                lowerBody.contains("at money")
+                lowerSender.contains("atmoney") ||
+                lowerBody.contains("at money") ||
+                lowerBody.contains("atmoney")
+
+        val isZeepay = lowerSender.contains("zeepay") || lowerBody.contains("zeepay")
+        val isGMoney = lowerSender.contains("g-money") || lowerSender.contains("gmoney") || lowerBody.contains("g-money")
 
         val isBank = lowerSender.contains("stanbic") ||
                 lowerSender.contains("ecobank") ||
@@ -84,21 +140,71 @@ class SmsParserEngine {
                 lowerSender.contains("fidelity") ||
                 lowerSender.contains("calbank") ||
                 lowerSender.contains("access") ||
-                lowerBody.contains("acct") ||
-                lowerBody.contains("pos txn")
+                lowerSender.contains("standard chartered") ||
+                lowerSender.contains("fnb") ||
+                lowerBody.contains("acct:") ||
+                lowerBody.contains("acct **") ||
+                lowerBody.contains("pos purchase") ||
+                lowerBody.contains("atm wdl")
 
-        // 1. Extract External Reference ID (Prioritize official Financial Transaction ID)
+        val isUtility = lowerSender.contains("ecg") ||
+                lowerSender.contains("gwcl") ||
+                lowerBody.contains("recharge your meter") ||
+                lowerBody.contains("use this token") ||
+                lowerBody.contains("meter")
+
+        val provider = when {
+            isMoMo -> "MTN MoMo"
+            isTelecel -> "Telecel Cash"
+            isAt -> "AT Money"
+            isZeepay -> "Zeepay"
+            isGMoney -> "G-Money"
+            isBank -> when {
+                lowerSender.contains("ecobank") || lowerBody.contains("ecobank") -> "Ecobank"
+                lowerSender.contains("stanbic") || lowerBody.contains("stanbic") -> "Stanbic Bank"
+                lowerSender.contains("gtbank") || lowerBody.contains("gtbank") -> "GTBank"
+                lowerSender.contains("zenith") || lowerBody.contains("zenith") -> "Zenith Bank"
+                lowerSender.contains("absa") || lowerBody.contains("absa") -> "Absa Bank"
+                lowerSender.contains("fidelity") || lowerBody.contains("fidelity") -> "Fidelity Bank"
+                lowerSender.contains("gcb") || lowerBody.contains("gcb") -> "GCB Bank"
+                lowerSender.contains("calbank") || lowerBody.contains("calbank") -> "CalBank"
+                lowerSender.contains("access") || lowerBody.contains("access") -> "Access Bank"
+                else -> "Bank Alert"
+            }
+            isUtility -> "Utility Service"
+            else -> "SMS Ingestion"
+        }
+
+        // -------------------------------------------------------------
+        // 2. Identify Currency
+        // -------------------------------------------------------------
+        var currency = "GHS"
+        when {
+            cleanBody.contains("USD") || cleanBody.contains("$") -> currency = "USD"
+            cleanBody.contains("EUR") || cleanBody.contains("€") -> currency = "EUR"
+            cleanBody.contains("GBP") || cleanBody.contains("£") -> currency = "GBP"
+            cleanBody.contains("NGN") || cleanBody.contains("₦") -> currency = "NGN"
+            cleanBody.contains("KES") || cleanBody.contains("KSH") -> currency = "KES"
+            cleanBody.contains("ZAR") -> currency = "ZAR"
+            else -> currency = "GHS"
+        }
+
+        // -------------------------------------------------------------
+        // 3. Extract External Reference ID (Financial Transaction ID / Txn ID)
+        // -------------------------------------------------------------
         var externalRef: String? = null
         val financialTxnPattern = Pattern.compile(
-            """(?:Financial\s*Transaction\s*Id|Txn\s*ID|TxnId|Transaction\s*ID)\s*[:.]?\s*([A-Za-z0-9\-_]{6,30})""",
+            """(?:Financial\s*Transaction\s*Id|Txn\s*ID|TxnId|Transaction\s*ID|Trans\s*ID|TransId)\s*[:.]?\s*([A-Za-z0-9\-_]{5,32})""",
             Pattern.CASE_INSENSITIVE
         )
         val financialTxnMatcher = financialTxnPattern.matcher(cleanBody)
         if (financialTxnMatcher.find()) {
             externalRef = financialTxnMatcher.group(1)?.trim()
-        } else {
+        }
+
+        if (externalRef == null) {
             val genericRefPattern = Pattern.compile(
-                """(?:Ref\s*ID|Reference|Ref\.?|ID[:.]?)\s*[:.]?\s*([A-Za-z0-9\-_]{6,30})""",
+                """(?:Ref\s*ID|Reference\s*ID|Ref\s*No|Reference\s*No|Reference|Ref\.?|Approval\s*Code|ID[:.]?)\s*[:.]?\s*([A-Za-z0-9\-_]{6,32})""",
                 Pattern.CASE_INSENSITIVE
             )
             val genericRefMatcher = genericRefPattern.matcher(cleanBody)
@@ -107,75 +213,193 @@ class SmsParserEngine {
             }
         }
 
-        // 2. Extract Currency
-        var currency = "GHS"
-        if (cleanBody.contains("USD") || cleanBody.contains("$")) {
-            currency = "USD"
-        } else if (cleanBody.contains("EUR") || cleanBody.contains("€")) {
-            currency = "EUR"
-        } else if (cleanBody.contains("GBP") || cleanBody.contains("£")) {
-            currency = "GBP"
-        }
-
-        // 3. Extract Amount
+        // -------------------------------------------------------------
+        // 4. Extract Amount
+        // -------------------------------------------------------------
         var amount: Double? = null
-        val amountPattern = Pattern.compile(
-            """(?:GHS|GH[Cc¢₵\u20B5\u01B5]|USD|\$|EUR|€|GBP|£|amount\s*of|paid|received|sent|debited|credited|for)\s*([0-9,]+(?:\.[0-9]{2})?)""",
+        val explicitAmountPattern = Pattern.compile(
+            """(?:GHS|GH[Cc¢₵\u20B5\u01B5]|USD|\$|EUR|€|GBP|£|NGN|KES|ZAR|amount\s*of|paid|received|sent|debited|credited|for)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})|[0-9]+(?:\.[0-9]{2})?)""",
             Pattern.CASE_INSENSITIVE
         )
-        val amountMatcher = amountPattern.matcher(cleanBody)
-        if (amountMatcher.find()) {
-            val amtStr = amountMatcher.group(1)?.replace(",", "")
+        val explicitAmountMatcher = explicitAmountPattern.matcher(cleanBody)
+        if (explicitAmountMatcher.find()) {
+            val amtStr = explicitAmountMatcher.group(1)?.replace(",", "")
             amount = amtStr?.toDoubleOrNull()
-        } else {
-            val fallbackPattern = Pattern.compile("""\b([0-9]{1,6}\.[0-9]{2})\b""")
+        }
+
+        if (amount == null) {
+            val fallbackPattern = Pattern.compile("""\b([0-9]{1,7}\.[0-9]{2})\b""")
             val fallbackMatcher = fallbackPattern.matcher(cleanBody)
             if (fallbackMatcher.find()) {
                 amount = fallbackMatcher.group(1)?.toDoubleOrNull()
             }
         }
 
-        // 4. Extract Direction (Debit vs Credit)
-        var direction = TransactionDirection.DEBIT
-        if (lowerBody.contains("received") ||
-            lowerBody.contains("credited") ||
-            lowerBody.contains("cash in") ||
-            lowerBody.contains("deposit") ||
-            lowerBody.contains("you have received") ||
-            lowerBody.contains("received payment")
-        ) {
-            direction = TransactionDirection.CREDIT
-        }
-
-        // 5. Extract Counterparty / Merchant
-        var counterparty: String? = null
-
-        // Priority 5a: Specific utility / power / water meter pattern: e.g. "to meter 54310900789 (STEPHEN ETSE)"
-        val meterPattern = Pattern.compile(
-            """(?:to\s+meter|meter)\s+([A-Za-z0-9\-]+)\s*(?:\(([^)]+)\))?""",
+        // -------------------------------------------------------------
+        // 5. Extract Fee (e-levy / service fee)
+        // -------------------------------------------------------------
+        var fee: Double? = null
+        val feePattern = Pattern.compile(
+            """(?:Fee\s*charged|Service\s*Charge|Fee|Service\s*Fee|Tax|Levy)[:\s]*(?:GHS|GH[Cc¢₵\u20B5\u01B5]|USD|\$)?\s*([0-9]+(?:\.[0-9]{2})?)""",
             Pattern.CASE_INSENSITIVE
         )
+        val feeMatcher = feePattern.matcher(cleanBody)
+        if (feeMatcher.find()) {
+            fee = feeMatcher.group(1)?.toDoubleOrNull()
+        }
+
+        // -------------------------------------------------------------
+        // 6. Extract Meter Number & Recharge Token
+        // -------------------------------------------------------------
+        var meterNumber: String? = null
+        var rechargeToken: String? = null
+
+        val tokenPattern = Pattern.compile("""(?:token|recharge\s*token)[:\s(]*([0-9\- ]{16,24})""", Pattern.CASE_INSENSITIVE)
+        val tokenMatcher = tokenPattern.matcher(cleanBody)
+        if (tokenMatcher.find()) {
+            rechargeToken = tokenMatcher.group(1)?.trim()
+        }
+
+        val meterPattern = Pattern.compile("""(?:to\s+meter|meter)\s+([0-9A-Za-z\-]{6,16})""", Pattern.CASE_INSENSITIVE)
         val meterMatcher = meterPattern.matcher(cleanBody)
         if (meterMatcher.find()) {
-            val meterNum = meterMatcher.group(1)?.trim()
-            val name = meterMatcher.group(2)?.trim()
-            if (!name.isNullOrBlank()) {
-                counterparty = "$name (Meter $meterNum)"
-            } else if (!meterNum.isNullOrBlank()) {
-                counterparty = "ECG Meter $meterNum"
+            meterNumber = meterMatcher.group(1)?.trim()
+        }
+
+        // -------------------------------------------------------------
+        // 7. Extract Transaction Subtype & Direction
+        // -------------------------------------------------------------
+        val isCredit = lowerBody.contains("you have received") ||
+                lowerBody.contains("received payment") ||
+                lowerBody.contains("payment received") ||
+                lowerBody.contains("credited with") ||
+                lowerBody.contains("credit: acct") ||
+                lowerBody.contains("acct credited") ||
+                lowerBody.contains("was credited with") ||
+                lowerBody.contains("deposit of") ||
+                lowerBody.contains("cash in of") ||
+                (lowerBody.contains("received") && !lowerBody.contains("received from agent"))
+
+        val direction = if (isCredit) TransactionDirection.CREDIT else TransactionDirection.DEBIT
+
+        val subType: SmsTransactionSubtype = when {
+            rechargeToken != null || meterNumber != null || lowerBody.contains("recharge request") || lowerBody.contains("recharge your meter") || lowerBody.contains("ecg") ->
+                SmsTransactionSubtype.BILL_RECHARGE
+
+            lowerBody.contains("cash out of") || lowerBody.contains("withdrawn at") || lowerBody.contains("atm wdl") || lowerBody.contains("cash withdrawal") ->
+                if (lowerBody.contains("atm")) SmsTransactionSubtype.ATM_WITHDRAWAL else SmsTransactionSubtype.CASH_OUT
+
+            lowerBody.contains("cash in of") || lowerBody.contains("deposit received") ->
+                SmsTransactionSubtype.CASH_IN
+
+            lowerBody.contains("airtime") || lowerBody.contains("bundle") || lowerBody.contains("data bundle") ->
+                SmsTransactionSubtype.AIRTIME_BUNDLE
+
+            lowerBody.contains("credit: acct") || lowerBody.contains("acct credited") || lowerBody.contains("was credited with") ->
+                SmsTransactionSubtype.BANK_CREDIT
+
+            lowerBody.contains("debit: acct") || lowerBody.contains("acct debited") || lowerBody.contains("pos purchase") || lowerBody.contains("pos txn") || lowerBody.contains("debited with") ->
+                SmsTransactionSubtype.BANK_DEBIT
+
+            lowerBody.contains("transferred to") || lowerBody.contains("transfer of") || lowerBody.contains("sent to") ->
+                SmsTransactionSubtype.P2P_SENT
+
+            isCredit ->
+                SmsTransactionSubtype.P2P_RECEIVED
+
+            lowerBody.contains("payment made for") || lowerBody.contains("payment to") || lowerBody.contains("paid to") || lowerBody.contains("paid ghs") ->
+                SmsTransactionSubtype.MERCHANT_PAYMENT
+
+            else ->
+                if (direction == TransactionDirection.CREDIT) SmsTransactionSubtype.GENERAL_INCOME else SmsTransactionSubtype.GENERAL_EXPENSE
+        }
+
+        // -------------------------------------------------------------
+        // 8. Extract Counterparty / Payee / Merchant
+        // -------------------------------------------------------------
+        var counterparty: String? = null
+        var counterpartyPhone: String? = null
+
+        // 8a. Meter Recharge Pattern: e.g. "to meter 54310900789 (STEPHEN ETSE)"
+        val meterNamePattern = Pattern.compile(
+            """(?:to\s+meter|meter)\s+([A-Za-z0-9\-]+)\s*\(([^)]+)\)""",
+            Pattern.CASE_INSENSITIVE
+        )
+        val meterNameMatcher = meterNamePattern.matcher(cleanBody)
+        if (meterNameMatcher.find()) {
+            val mNum = meterNameMatcher.group(1)?.trim()
+            val mName = meterNameMatcher.group(2)?.trim()
+            if (!mName.isNullOrBlank()) {
+                counterparty = "$mName (Meter $mNum)"
             }
         }
 
-        // Priority 5b: General merchant pattern
-        if (counterparty == null) {
-            val merchantPattern = Pattern.compile(
-                """(?:payment to|paid to|sent to|made to|transferred to|received from|from|\bto)\s+([A-Za-z0-9\s\-()&'.]+?)(?:\.\s*(?:Current|Bal|Ref|Txn|Fee|is)|\s+has\s+been|\s+on\s+\d|\s*$|\.)""",
+        // 8b. Cash Out / In Agent pattern: e.g. "from Agent 0244111222 - JOE VENTURES was successful"
+        if (counterparty == null && (subType == SmsTransactionSubtype.CASH_OUT || subType == SmsTransactionSubtype.CASH_IN)) {
+            val agentPattern = Pattern.compile(
+                """(?:from\s+Agent|received\s+from\s+Agent)\s+(?:(0\d{9}|\+?233\d{9})\s*[-–—:]*\s*)?([A-Za-z0-9\s&'.-]+?)(?:\s+(?:was\s+successful|has\s+been|\.|\n|$))""",
                 Pattern.CASE_INSENSITIVE
             )
-            val merchantMatcher = merchantPattern.matcher(cleanBody)
-            while (merchantMatcher.find()) {
-                val candidate = merchantMatcher.group(1)?.trim()
-                val lowerCandidate = candidate?.lowercase(Locale.ROOT) ?: ""
+            val agentMatcher = agentPattern.matcher(cleanBody)
+            if (agentMatcher.find()) {
+                counterpartyPhone = agentMatcher.group(1)?.trim()
+                val aName = agentMatcher.group(2)?.trim()
+                if (!aName.isNullOrBlank()) {
+                    counterparty = "$aName (MoMo Agent)"
+                }
+            }
+        }
+
+        // 8c. Bank Alert Desc / Narration / Merchant at: e.g. "Desc: POS PURCHASE - SHOPRITE ACCRA" or "at TOTAL SERVICE STATION"
+        if (counterparty == null && isBank) {
+            val bankDescPattern = Pattern.compile(
+                """(?:Desc|Description|Details|Narration)[:\s]+([^.\n]+?)(?:\s+(?:Date|Bal|Ref|Avail|on\s+\d)|$)""",
+                Pattern.CASE_INSENSITIVE
+            )
+            val bankDescMatcher = bankDescPattern.matcher(cleanBody)
+            if (bankDescMatcher.find()) {
+                var desc = bankDescMatcher.group(1)?.trim() ?: ""
+                desc = desc.replace(Regex("(?i)^(?:pos purchase|pos txn|web purchase|purchase|atm wdl|w/d|transfer to|bill payment)"), "").trim()
+                desc = desc.replace(Regex("^[-–—\\s:]+"), "").trim()
+                if (desc.isNotBlank()) {
+                    counterparty = desc
+                }
+            }
+
+            if (counterparty == null) {
+                val bankAtPattern = Pattern.compile(
+                    """(?:at|for\s+pos\s+transaction\s+at)\s+([A-Za-z0-9\s&'.-]+?)(?:\s+(?:Avail|Bal|Ref|Date|on\s+\d|\.|\n|$))""",
+                    Pattern.CASE_INSENSITIVE
+                )
+                val bankAtMatcher = bankAtPattern.matcher(cleanBody)
+                if (bankAtMatcher.find()) {
+                    val atName = bankAtMatcher.group(1)?.trim()
+                    if (!atName.isNullOrBlank() && atName.length in 2..50) {
+                        counterparty = atName
+                    }
+                }
+            }
+        }
+
+        // 8d. Standard MoMo / P2P Pattern: e.g. "Payment made for GHS 120.00 to KFC ACCRA AIRPORT." or "to 0244123456 - KOFI MENSAH"
+        if (counterparty == null) {
+            val targetRegex = when (direction) {
+                TransactionDirection.CREDIT ->
+                    Pattern.compile(
+                        """(?:received\s+from|from|received\s+via)\s+([A-Za-z0-9\s\-()&'.]+?)(?:\.\s*(?:Current|Bal|Ref|Txn|Fee|is)|\s+has\s+been|\s+on\s+\d|\s*$|\.)""",
+                        Pattern.CASE_INSENSITIVE
+                    )
+                else ->
+                    Pattern.compile(
+                        """(?:payment\s+made\s+for[^\n]+to|payment\s+of[^\n]+to|payment\s+to|paid\s+to|paid\s+ghs[^\n]+to|sent\s+to|made\s+to|transferred\s+to|transfer\s+of[^\n]+to|transfer\s+to|to)\s+([A-Za-z0-9\s\-()&'.]+?)(?:\.\s*(?:Current|Bal|Ref|Txn|Fee|is)|\s+has\s+been|\s+was\s+successful|\s+on\s+\d|\s*$|\.)""",
+                        Pattern.CASE_INSENSITIVE
+                    )
+            }
+
+            val matcher = targetRegex.matcher(cleanBody)
+            while (matcher.find()) {
+                var candidate = matcher.group(1)?.trim() ?: ""
+                val lowerCandidate = candidate.lowercase(Locale.ROOT)
                 val isActionPhrase = lowerCandidate.startsWith("recharge your meter") ||
                         lowerCandidate.startsWith("recharge meter") ||
                         lowerCandidate.startsWith("use this token") ||
@@ -183,17 +407,49 @@ class SmsParserEngine {
                         lowerCandidate.startsWith("pay bill") ||
                         lowerCandidate.startsWith("cash out") ||
                         lowerCandidate.startsWith("cash in")
-                if (!candidate.isNullOrBlank() && candidate.length in 2..60 && !isActionPhrase) {
-                    counterparty = candidate
-                    break
+
+                if (candidate.isNotBlank() && candidate.length in 2..60 && !isActionPhrase) {
+                    // Extract phone number if preceding or trailing: e.g. "0244123456 - KOFI MENSAH" or "KOFI MENSAH (0244123456)"
+                    val leadingPhonePattern = Pattern.compile("""^(0\d{9}|\+?233\d{9})\s*[-–—:]*\s*""")
+                    val leadingPhoneMatcher = leadingPhonePattern.matcher(candidate)
+                    if (leadingPhoneMatcher.find()) {
+                        counterpartyPhone = leadingPhoneMatcher.group(1)
+                        candidate = candidate.substring(leadingPhoneMatcher.end()).trim()
+                    }
+
+                    val trailingParenPhonePattern = Pattern.compile("""\((0\d{9}|\+?233\d{9})\)""")
+                    val trailingParenPhoneMatcher = trailingParenPhonePattern.matcher(candidate)
+                    if (trailingParenPhoneMatcher.find()) {
+                        counterpartyPhone = trailingParenPhoneMatcher.group(1)
+                        candidate = candidate.replace(trailingParenPhonePattern.toRegex(), "").trim()
+                    }
+
+                    if (candidate.isNotBlank()) {
+                        counterparty = candidate
+                        break
+                    }
                 }
             }
         }
 
-        // 6. Extract Ending Balance
+        // 8d. Fallback if Cash Out or Airtime
+        if (counterparty == null) {
+            counterparty = when (subType) {
+                SmsTransactionSubtype.CASH_OUT -> "Cash Out (MoMo Agent)"
+                SmsTransactionSubtype.CASH_IN -> "Cash In (MoMo Agent)"
+                SmsTransactionSubtype.AIRTIME_BUNDLE -> "Airtime & Data Recharge"
+                SmsTransactionSubtype.ATM_WITHDRAWAL -> "ATM Cash Withdrawal"
+                SmsTransactionSubtype.BILL_RECHARGE -> "ECG Meter Recharge"
+                else -> if (direction == TransactionDirection.CREDIT) "Payment Received" else "Payment Disbursed"
+            }
+        }
+
+        // -------------------------------------------------------------
+        // 9. Extract Ending Balance
+        // -------------------------------------------------------------
         var endingBalance: Double? = null
         val balPattern = Pattern.compile(
-            """(?:Current\s*Balance|Bal[:.]?|Balance[:.]?|Available\s*Balance)\s*(?:is\s*)?(?:GHS|GH[Cc¢₵\u20B5\u01B5]|USD|\$)?\s*([0-9,]+(?:\.[0-9]{2})?)""",
+            """(?:Current\s*Balance|Bal[:.]?|Balance[:.]?|Available\s*Balance|Avail\s*Bal|New\s*balance\s*is)\s*(?:is\s*)?(?:GHS|GH[Cc¢₵\u20B5\u01B5]|USD|\$|NGN|KES|ZAR)?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})|[0-9]+(?:\.[0-9]{2})?)""",
             Pattern.CASE_INSENSITIVE
         )
         val balMatcher = balPattern.matcher(cleanBody)
@@ -202,7 +458,9 @@ class SmsParserEngine {
             endingBalance = balStr?.toDoubleOrNull()
         }
 
-        // 7. Extract Date
+        // -------------------------------------------------------------
+        // 10. Extract Date & Time
+        // -------------------------------------------------------------
         var timestamp = System.currentTimeMillis()
         val datePattern = Pattern.compile("""\bon\s+(\d{1,2})[-/.](\d{1,2})[-/.](20\d{2}|\d{2})\b""")
         val dateMatcher = datePattern.matcher(cleanBody)
@@ -218,28 +476,46 @@ class SmsParserEngine {
             } catch (_: Exception) {}
         }
 
-        val provider = when {
-            isMoMo -> "MTN MoMo"
-            isTelecel -> "Telecel Cash"
-            isAt -> "AT Money"
-            isBank -> "Bank Alert"
-            else -> "SMS Ingestion"
+        // -------------------------------------------------------------
+        // 11. Category Suggestion
+        // -------------------------------------------------------------
+        val cpLower = (counterparty ?: "").lowercase(Locale.ROOT)
+        val suggestedCategory = when (subType) {
+            SmsTransactionSubtype.BILL_RECHARGE -> "Bills & Utilities"
+            SmsTransactionSubtype.AIRTIME_BUNDLE -> "Bills & Utilities"
+            SmsTransactionSubtype.BANK_CREDIT, SmsTransactionSubtype.P2P_RECEIVED -> "Income"
+            else -> when {
+                cpLower.contains("kfc") || cpLower.contains("restaurant") || cpLower.contains("chop") ||
+                        cpLower.contains("pizza") || cpLower.contains("inn") || cpLower.contains("food") -> "Food & Dining"
+                cpLower.contains("bolt") || cpLower.contains("uber") || cpLower.contains("fuel") ||
+                        cpLower.contains("shell") || cpLower.contains("total") || cpLower.contains("goil") -> "Transportation"
+                cpLower.contains("shoprite") || cpLower.contains("melcom") || cpLower.contains("game") ||
+                        cpLower.contains("market") || cpLower.contains("groceries") -> "Shopping & Groceries"
+                else -> "General"
+            }
         }
 
-        val resolvedCounterparty = counterparty
-            ?: if (direction == TransactionDirection.CREDIT) "Payment Received" else "Payment Disbursed"
+        val isFinancial = amount != null && amount > 0
 
         return ParsedSmsResult(
-            isFinancial = amount != null && amount > 0,
+            isFinancial = isFinancial,
             externalRef = externalRef,
             amount = amount,
+            fee = fee,
             currency = currency,
             direction = direction,
-            counterparty = resolvedCounterparty,
+            subType = subType,
+            counterparty = counterparty ?: if (direction == TransactionDirection.CREDIT) "Payment Received" else "Payment Disbursed",
+            counterpartyPhone = counterpartyPhone,
+            meterNumber = meterNumber,
+            rechargeToken = rechargeToken,
             endingBalance = endingBalance,
             timestamp = timestamp,
             rawBody = cleanBody,
-            provider = provider
+            provider = provider,
+            suggestedCategory = suggestedCategory,
+            confidenceScore = if (externalRef != null && amount != null) 0.98 else 0.85,
+            isAiParsed = false
         )
     }
 }

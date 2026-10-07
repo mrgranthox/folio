@@ -417,6 +417,26 @@ fun QuickPasteSmsDialog(
                         FilterChip(
                             selected = false,
                             onClick = {
+                                smsText = "Payment made for GHS 150.00 to 0244123456 - KOFI MENSAH. Current Balance: GHS 956.81. Available Balance: GHS 956.81. Fee charged: GHS 1.12. Reference: Support. Financial Transaction Id: 42475490996."
+                            },
+                            label = { Text("MoMo Transfer (with Phone)", fontSize = 11.sp) },
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = false,
+                            onClick = {
+                                smsText = "Cash Out of GHS 200.00 from Agent 0244111222 - JOE VENTURES was successful. Fee charged: GHS 2.00. Current Balance: GHS 1,998.12. Available Balance: GHS 1,998.12. Reference: Cash out. Transaction ID: 42483562773."
+                            },
+                            label = { Text("MoMo Cash Out Agent", fontSize = 11.sp) },
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = false,
+                            onClick = {
                                 smsText = "Debit Alert: Your Account has been debited by GHS 250.00 at TOTAL AIRPORT. Available Bal: GHS 1,450.00. Ref: BNK772810."
                             },
                             label = { Text("Sample Bank Alert", fontSize = 11.sp) },
@@ -557,6 +577,20 @@ fun QuickPasteSmsDialog(
                                         value = parsedResult.counterparty,
                                         icon = Icons.Default.Storefront
                                     )
+                                    parsedResult.rechargeToken?.let { token ->
+                                        DetailItemRow(
+                                            label = "Prepaid Recharge Token",
+                                            value = token,
+                                            icon = Icons.Default.DoneAll
+                                        )
+                                    }
+                                    parsedResult.meterNumber?.let { meter ->
+                                        DetailItemRow(
+                                            label = "Meter Number",
+                                            value = meter,
+                                            icon = Icons.Default.Numbers
+                                        )
+                                    }
                                     DetailItemRow(
                                         label = "Assigned Wallet Rail",
                                         value = autoMatchedAccount?.name ?: parsedResult.provider,
@@ -567,6 +601,13 @@ fun QuickPasteSmsDialog(
                                             label = "Auto-Matched Category",
                                             value = cat.name,
                                             icon = Icons.Default.Category
+                                        )
+                                    }
+                                    parsedResult.fee?.let { fee ->
+                                        DetailItemRow(
+                                            label = "Transaction Fee / Levy",
+                                            value = "${parsedResult.currency} ${String.format(Locale.US, "%.2f", fee)}",
+                                            icon = Icons.Default.Check
                                         )
                                     }
                                     parsedResult.externalRef?.let { ref ->

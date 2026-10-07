@@ -2,10 +2,13 @@ package com.example.ui.viewmodel
 
 import android.app.Application
 import android.content.Context
+import android.net.Uri
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.ai.ChatMessage
 import com.example.data.ai.GeminiChatService
+import com.example.data.ai.GeminiVisionReceiptService
 import com.example.data.engine.ReceiptDraft
 import com.example.data.engine.ReconciliationEngine
 import com.example.data.engine.ReconciliationOutcome
@@ -16,6 +19,8 @@ import com.example.data.model.TransactionDirection
 import com.example.data.model.TransactionEntity
 import com.example.data.model.UnrecognizedMessageEntity
 import com.example.data.repository.ExpenseRepository
+import com.example.data.sms.SmsInboxReader
+import com.example.data.sms.SmsSyncReport
 import com.example.ui.components.CurrencyUtils
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -503,6 +508,25 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     }
 
     // --- Ingestion Pipeline Operations ---
+    var isSyncingInboxSms = mutableStateOf(false)
+        private set
+
+    fun syncInboxSms(context: Context, onComplete: ((SmsSyncReport) -> Unit)? = null) {
+        viewModelScope.launch {
+            isSyncingInboxSms.value = true
+            try {
+                val reader = SmsInboxReader(context)
+                val report = reader.scanAndIngestInbox(repository, maxMessages = 200)
+                _snackbarEvent.emit("SMS Inbox Sync: ${report.insertedCount} new added, ${report.duplicateSkippedCount} duplicates skipped.")
+                onComplete?.invoke(report)
+            } catch (e: Exception) {
+                _snackbarEvent.emit("Could not sync SMS inbox: ${e.localizedMessage}")
+            } finally {
+                isSyncingInboxSms.value = false
+            }
+        }
+    }
+
     fun simulateSmsIngest(sender: String, body: String) {
         viewModelScope.launch {
             val (outcome, msg) = repository.ingestSms(sender, body)
@@ -510,10 +534,24 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    private val visionService = GeminiVisionReceiptService()
+
     fun parseReceiptText(text: String, onResult: (ReceiptDraft) -> Unit) {
         viewModelScope.launch {
             val draft = repository.parseReceipt(text)
             onResult(draft)
+        }
+    }
+
+    fun analyzeReceiptImage(
+        context: Context,
+        imageUri: Uri,
+        onResult: (ReceiptDraft?) -> Unit
+    ) {
+        viewModelScope.launch {
+            val userKey = _customGeminiApiKey.value.ifBlank { null }
+            val aiDraft = visionService.analyzeReceipt(context, imageUri, userKey)
+            onResult(aiDraft)
         }
     }
 

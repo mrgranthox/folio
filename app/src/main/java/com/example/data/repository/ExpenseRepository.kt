@@ -182,17 +182,25 @@ class ExpenseRepository(context: Context) {
         val parsed = smsParser.parse(sender, body)
         if (parsed.isFinancial) {
             val accountsList = accountDao.getAllAccountsList()
-            val momoAccount = accountsList.firstOrNull { it.accountType.equals("MOMO", ignoreCase = true) }
-                ?: accountsList.firstOrNull()
-                ?: AccountEntity(id = "acc-default", name = "Default Wallet", accountType = "MOMO", currentBalance = 0.0)
+            val targetAccount = when {
+                parsed.provider.contains("Telecel", ignoreCase = true) ->
+                    accountsList.firstOrNull { it.name.contains("Telecel", ignoreCase = true) || it.name.contains("Vodafone", ignoreCase = true) }
+                parsed.provider.contains("MoMo", ignoreCase = true) || parsed.provider.contains("MTN", ignoreCase = true) ->
+                    accountsList.firstOrNull { it.name.contains("MTN", ignoreCase = true) || it.accountType.equals("MOMO", ignoreCase = true) }
+                parsed.provider.contains("Bank", ignoreCase = true) || parsed.provider.contains("Ecobank", ignoreCase = true) || parsed.provider.contains("Stanbic", ignoreCase = true) ->
+                    accountsList.firstOrNull { it.accountType.equals("BANK", ignoreCase = true) || it.name.contains(parsed.provider, ignoreCase = true) }
+                else -> null
+            } ?: accountsList.firstOrNull { it.accountType.equals("MOMO", ignoreCase = true) }
+              ?: accountsList.firstOrNull()
+              ?: AccountEntity(id = "acc-default", name = "Default Wallet", accountType = "MOMO", currentBalance = 0.0)
 
             val categoriesList = categoryDao.getAllCategoriesList()
             // Auto match category based on counterparty and SMS reference content
             val cat = autoCategorize(parsed.counterparty, parsed.rawBody, categoriesList)
 
             val candidateTx = parsed.toTransactionEntity(
-                accountId = momoAccount.id,
-                accountRail = momoAccount.name,
+                accountId = targetAccount.id,
+                accountRail = targetAccount.name,
                 categoryId = cat.id,
                 categoryName = cat.name,
                 categoryColor = cat.colorHex
@@ -215,8 +223,13 @@ class ExpenseRepository(context: Context) {
                 }
                 ReconciliationOutcome.INSERTED_NEW -> {
                     transactionDao.insertTransaction(candidateTx)
-                    // Update account balance
-                    accountDao.updateBalance(momoAccount.id, momoAccount.currentBalance + candidateTx.amount)
+                    // If ending balance was extracted from official SMS, sync account balance to it; otherwise apply delta
+                    val updatedBal = if (parsed.endingBalance != null && parsed.endingBalance >= 0) {
+                        parsed.endingBalance
+                    } else {
+                        targetAccount.currentBalance + candidateTx.amount
+                    }
+                    accountDao.updateBalance(targetAccount.id, updatedBal)
                     Pair(ReconciliationOutcome.INSERTED_NEW, "Ingested: ${candidateTx.currency} ${String.format("%.2f", kotlin.math.abs(candidateTx.amount))} to ${candidateTx.counterparty}")
                 }
             }

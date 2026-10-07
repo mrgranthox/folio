@@ -99,6 +99,8 @@ fun SettingsScreen(
     onResetDemoData: () -> Unit,
     onClearAllData: () -> Unit,
     onOpenOnboardingFunnel: () -> Unit = {},
+    isSyncingInboxSms: Boolean = false,
+    onSyncInboxSms: () -> Unit = {},
     snackbarHostState: SnackbarHostState? = null,
     modifier: Modifier = Modifier
 ) {
@@ -124,6 +126,18 @@ fun SettingsScreen(
             snackbarHostState?.showSnackbar(
                 if (isGranted) "SMS background listener enabled." else "SMS permission was denied."
             )
+        }
+    }
+
+    val readSmsPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            onSyncInboxSms()
+        } else {
+            coroutineScope.launch {
+                snackbarHostState?.showSnackbar("SMS Read permission required to scan device inbox.")
+            }
         }
     }
 
@@ -307,6 +321,76 @@ fun SettingsScreen(
                                 },
                                 colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary)
                             )
+                        }
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                        )
+
+                        // Scan & Sync SMS from Device Inbox
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.secondaryContainer),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.secondary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(14.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Sync Device SMS Inbox",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                                )
+                                Text(
+                                    text = "Scan past MoMo, Telecel & Bank SMS alerts",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            Button(
+                                onClick = {
+                                    val hasReadPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
+                                    if (hasReadPermission) {
+                                        onSyncInboxSms()
+                                    } else {
+                                        readSmsPermissionLauncher.launch(Manifest.permission.READ_SMS)
+                                    }
+                                },
+                                enabled = !isSyncingInboxSms,
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                if (isSyncingInboxSms) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Syncing...", fontSize = 12.sp)
+                                } else {
+                                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Sync Inbox", fontSize = 12.sp)
+                                }
+                            }
                         }
 
                         HorizontalDivider(

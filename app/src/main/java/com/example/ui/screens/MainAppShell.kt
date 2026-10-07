@@ -1,10 +1,16 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -50,10 +56,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -61,6 +70,7 @@ import com.example.data.model.TransactionEntity
 import com.example.ui.theme.PrimaryGreen
 import com.example.ui.viewmodel.ExpenseViewModel
 import kotlinx.coroutines.flow.collectLatest
+import java.util.Locale
 
 enum class AppTab(val label: String, val icon: ImageVector) {
     OVERVIEW("Overview", Icons.Default.Dashboard),
@@ -76,6 +86,7 @@ fun MainAppShell(
     viewModel: ExpenseViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedTab by remember { mutableIntStateOf(0) }
 
@@ -195,6 +206,8 @@ fun MainAppShell(
                     onResetDemoData = { viewModel.resetDemoData() },
                     onClearAllData = { viewModel.clearAllData() },
                     onOpenOnboardingFunnel = { showOnboardingFunnel = true },
+                    isSyncingInboxSms = viewModel.isSyncingInboxSms.value,
+                    onSyncInboxSms = { viewModel.syncInboxSms(context) },
                     snackbarHostState = snackbarHostState
                 )
             }
@@ -267,48 +280,74 @@ fun MainAppShell(
                         MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
                     )
                 ) {
-                    NavigationBar(
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(62.dp),
-                        containerColor = Color.Transparent,
-                        tonalElevation = 0.dp,
-                        windowInsets = WindowInsets(0, 0, 0, 0)
+                            .height(64.dp)
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         AppTab.entries.forEachIndexed { index, tab ->
                             val isSelected = selectedTab == index
-                            NavigationBarItem(
-                                selected = isSelected,
-                                onClick = { selectedTab = index },
-                                icon = {
+                            val animatedBgColor by animateColorAsState(
+                                targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                label = "tab_bg"
+                            )
+                            val animatedContentColor by animateColorAsState(
+                                targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                label = "tab_content"
+                            )
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clip(CircleShape)
+                                    .background(animatedBgColor)
+                                    .clickable { selectedTab = index }
+                                    .testTag("tab_${tab.name.lowercase(Locale.ROOT)}"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center,
+                                    modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp)
+                                ) {
                                     if (tab == AppTab.REVIEW && reviewBadgeCount > 0) {
                                         BadgedBox(badge = {
                                             Badge(containerColor = MaterialTheme.colorScheme.error) {
                                                 Text("$reviewBadgeCount")
                                             }
                                         }) {
-                                            Icon(tab.icon, contentDescription = tab.label)
+                                            Icon(
+                                                imageVector = tab.icon,
+                                                contentDescription = tab.label,
+                                                tint = animatedContentColor,
+                                                modifier = Modifier.size(20.dp)
+                                            )
                                         }
                                     } else {
-                                        Icon(tab.icon, contentDescription = tab.label)
+                                        Icon(
+                                            imageVector = tab.icon,
+                                            contentDescription = tab.label,
+                                            tint = animatedContentColor,
+                                            modifier = Modifier.size(20.dp)
+                                        )
                                     }
-                                },
-                                label = {
+                                    Spacer(modifier = Modifier.height(2.dp))
                                     Text(
                                         text = tab.label,
                                         style = MaterialTheme.typography.labelSmall.copy(
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                                        )
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            fontSize = 10.5.sp
+                                        ),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = animatedContentColor
                                     )
-                                },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            )
+                                }
+                            }
                         }
                     }
                 }
@@ -360,10 +399,13 @@ fun MainAppShell(
             categories = state.categories,
             sheetState = ocrSheetState,
             onDismiss = { showOcrScannerSheet = false },
+            onAnalyzeImage = { ctx, uri, callback ->
+                viewModel.analyzeReceiptImage(ctx, uri, callback)
+            },
             onParseText = { text, callback ->
                 viewModel.parseReceiptText(text, callback)
             },
-            onSaveTransaction = { payee, amt, curr, isInc, accId, catId, notes, ts, img ->
+            onSaveTransaction = { payee, amt, curr, isInc, accId, catId, notes, ts, img, ref ->
                 viewModel.addTransaction(
                     counterparty = payee,
                     amount = amt,
@@ -373,6 +415,8 @@ fun MainAppShell(
                     categoryId = catId,
                     notes = notes,
                     timestamp = ts,
+                    sourceMethod = "ocr",
+                    externalRef = ref,
                     receiptImagePath = img
                 )
             }

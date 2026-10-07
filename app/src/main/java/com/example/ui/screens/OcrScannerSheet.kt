@@ -1,18 +1,21 @@
 package com.example.ui.screens
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,8 +30,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Receipt
@@ -40,6 +46,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,6 +54,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SheetState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -90,6 +98,7 @@ fun OcrScannerSheet(
     categories: List<CategoryEntity>,
     sheetState: SheetState,
     onDismiss: () -> Unit,
+    onAnalyzeImage: ((Context, Uri, (ReceiptDraft?) -> Unit) -> Unit)? = null,
     onParseText: (String, (ReceiptDraft) -> Unit) -> Unit,
     onSaveTransaction: (
         merchant: String,
@@ -100,7 +109,8 @@ fun OcrScannerSheet(
         categoryId: String,
         notes: String?,
         timestamp: Long,
-        receiptImagePath: String?
+        receiptImagePath: String?,
+        externalRef: String?
     ) -> Unit
 ) {
     val context = LocalContext.current
@@ -109,43 +119,80 @@ fun OcrScannerSheet(
     var photoUri by remember { mutableStateOf<Uri?>(null) }
     var photoFile by remember { mutableStateOf<File?>(null) }
     var isProcessingOcr by remember { mutableStateOf(false) }
+    var ocrStatusText by remember { mutableStateOf("Processing...") }
 
     var merchant by remember { mutableStateOf("") }
     var amountText by remember { mutableStateOf("") }
     var currency by remember { mutableStateOf("GHS") }
+    var referenceNumber by remember { mutableStateOf("") }
+    var transactionType by remember { mutableStateOf("EXPENSE") } // "EXPENSE", "INCOME", "BILL_PAYMENT", "TRANSFER"
     var taxVat by remember { mutableDoubleStateOf(0.0) }
     var notes by remember { mutableStateOf("") }
     var confidenceScore by remember { mutableStateOf<Int?>(null) }
+    var isAiVerified by remember { mutableStateOf(false) }
     var selectedAccountId by remember { mutableStateOf(accounts.firstOrNull()?.id ?: "") }
     var selectedCategoryId by remember { mutableStateOf(categories.firstOrNull()?.id ?: "") }
     var receiptTimestamp by remember { mutableStateOf(System.currentTimeMillis()) }
 
-    fun processImageUri(uri: Uri) {
-        isProcessingOcr = true
+    fun applyDraft(draft: ReceiptDraft, fromAi: Boolean) {
+        merchant = draft.merchant ?: ""
+        val amt = draft.amount ?: 0.0
+        amountText = if (amt > 0) String.format(Locale.US, "%.2f", amt) else ""
+        currency = draft.currency
+        referenceNumber = draft.referenceNumber ?: ""
+        transactionType = draft.transactionType
+        taxVat = draft.tax ?: 0.0
+        confidenceScore = (draft.confidenceScore * 100).toInt()
+        receiptTimestamp = draft.date
+        isAiVerified = fromAi
+
+        // Notes and line items
+        val refNote = if (!draft.referenceNumber.isNullOrBlank()) " [Ref: ${draft.referenceNumber}]" else ""
+        val taxNote = if (draft.tax != null && draft.tax > 0) " (Includes Tax: ${CurrencyUtils.format(draft.tax, draft.currency)})" else ""
+        val summaryNote = if (!draft.itemsSummary.isNullOrBlank()) draft.itemsSummary else ""
+        notes = listOfNotNull(
+            summaryNote.ifBlank { null },
+            if (fromAi) "Scanned with Gemini Vision Intelligence$refNote$taxNote" else "Scanned via On-Device OCR$refNote$taxNote"
+        ).joinToString(" • ")
+
+        // Category Auto-matching
+        val suggested = draft.suggestedCategory ?: ""
+        val matchedCat = categories.firstOrNull { cat ->
+            cat.name.equals(suggested, ignoreCase = true) ||
+                    (suggested.isNotBlank() && cat.name.contains(suggested.split(" ").first(), ignoreCase = true)) ||
+                    (merchant.isNotBlank() && cat.name.contains("Food", ignoreCase = true) && (merchant.contains("KFC", ignoreCase = true) || merchant.contains("Chop", ignoreCase = true) || merchant.contains("Inn", ignoreCase = true) || merchant.contains("Pizza", ignoreCase = true))) ||
+                    (merchant.isNotBlank() && cat.name.contains("Bills", ignoreCase = true) && (merchant.contains("ECG", ignoreCase = true) || merchant.contains("Meter", ignoreCase = true) || merchant.contains("Water", ignoreCase = true))) ||
+                    (merchant.isNotBlank() && cat.name.contains("Transport", ignoreCase = true) && (merchant.contains("Shell", ignoreCase = true) || merchant.contains("Total", ignoreCase = true) || merchant.contains("Goil", ignoreCase = true) || merchant.contains("Fuel", ignoreCase = true)))
+        }
+        if (matchedCat != null) {
+            selectedCategoryId = matchedCat.id
+        }
+
+        // Account / Wallet Auto-matching
+        val rail = draft.paymentRail ?: ""
+        val matchedAccount = accounts.firstOrNull { acc ->
+            (rail.contains("momo", ignoreCase = true) || rail.contains("mtn", ignoreCase = true)) && acc.accountType.equals("MOBILE_MONEY", ignoreCase = true) && acc.name.contains("MTN", ignoreCase = true) ||
+                    (rail.contains("telecel", ignoreCase = true) || rail.contains("vodafone", ignoreCase = true)) && acc.name.contains("Telecel", ignoreCase = true) ||
+                    (rail.contains("bank", ignoreCase = true) || rail.contains("card", ignoreCase = true)) && acc.accountType.equals("BANK", ignoreCase = true) ||
+                    (rail.contains("cash", ignoreCase = true)) && acc.accountType.equals("CASH", ignoreCase = true)
+        }
+        if (matchedAccount != null) {
+            selectedAccountId = matchedAccount.id
+        }
+
+        isProcessingOcr = false
+    }
+
+    fun fallbackToLocalOcr(uri: Uri) {
+        ocrStatusText = "Extracting with enterprise on-device OCR..."
         scope.launch(Dispatchers.IO) {
             try {
                 val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
                 val inputImage = InputImage.fromFilePath(context, uri)
                 recognizer.process(inputImage)
                     .addOnSuccessListener { visionText ->
-                        val recognizedText = visionText.text
-                        onParseText(recognizedText) { parsed ->
-                            merchant = parsed.merchant ?: ""
-                            val amt = parsed.amount ?: 0.0
-                            amountText = if (amt > 0) String.format(Locale.US, "%.2f", amt) else ""
-                            currency = parsed.currency
-                            taxVat = parsed.tax ?: 0.0
-                            confidenceScore = (parsed.confidenceScore * 100).toInt()
-                            receiptTimestamp = parsed.date
-
-                            val taxInfo = if (parsed.tax != null && parsed.tax > 0) " (Includes VAT/Taxes: ${CurrencyUtils.format(parsed.tax, parsed.currency)})" else ""
-                            notes = "Scanned via Camera OCR${taxInfo}"
-
-                            val matchedCat = categories.firstOrNull { it.name.contains("Food", ignoreCase = true) || it.name.contains("Groceries", ignoreCase = true) }
-                            if (matchedCat != null) {
-                                selectedCategoryId = matchedCat.id
-                            }
-                            isProcessingOcr = false
+                        onParseText(visionText.text) { localDraft ->
+                            applyDraft(localDraft, fromAi = false)
                         }
                     }
                     .addOnFailureListener { e ->
@@ -160,6 +207,25 @@ fun OcrScannerSheet(
                     Toast.makeText(context, "Could not load image: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
                 }
             }
+        }
+    }
+
+    fun processImageUri(uri: Uri) {
+        isProcessingOcr = true
+        ocrStatusText = "Analyzing document with Gemini Vision Intelligence..."
+
+        // 1. Try Gemini Vision First
+        if (onAnalyzeImage != null) {
+            onAnalyzeImage.invoke(context, uri) { aiDraft ->
+                if (aiDraft != null && (!aiDraft.merchant.isNullOrBlank() || aiDraft.amount != null)) {
+                    applyDraft(aiDraft, fromAi = true)
+                } else {
+                    // Fallback to local OCR if AI returned null or unconfigured
+                    fallbackToLocalOcr(uri)
+                }
+            }
+        } else {
+            fallbackToLocalOcr(uri)
         }
     }
 
@@ -248,15 +314,22 @@ fun OcrScannerSheet(
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Default.Close, contentDescription = "Close")
                 }
-                Text(
-                    text = "Receipt OCR Scanner",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "Receipt & Document OCR",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Enterprise AI Intelligence",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = PrimaryGreen
+                    )
+                }
                 Icon(Icons.Default.DocumentScanner, contentDescription = null, tint = PrimaryGreen)
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Action Buttons: Open Camera & Select from Gallery
             Row(
@@ -298,7 +371,7 @@ fun OcrScannerSheet(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Photo Preview & Status Box
+            // Photo Preview & Processing Status
             if (photoUri != null) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -324,23 +397,34 @@ fun OcrScannerSheet(
                         if (isProcessingOcr) {
                             Spacer(modifier = Modifier.height(12.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                    color = PrimaryGreen
+                                )
                                 Spacer(modifier = Modifier.width(10.dp))
-                                Text("Recognizing text and extracting total...", style = MaterialTheme.typography.bodySmall)
+                                Text(
+                                    text = ocrStatusText,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium)
+                                )
                             }
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
             }
 
-            // Confidence Score & Extracted Details Pill
-            if (confidenceScore != null) {
+            // AI Status & Confidence Badge
+            if (confidenceScore != null && !isProcessingOcr) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (confidenceScore!! >= 75) PrimaryGreen.copy(alpha = 0.15f) else WarningAmber.copy(alpha = 0.15f)
+                        containerColor = if (isAiVerified) PrimaryGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                    border = BorderStroke(
+                        1.dp,
+                        if (isAiVerified) PrimaryGreen.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
                     )
                 ) {
                     Row(
@@ -351,42 +435,141 @@ fun OcrScannerSheet(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Receipt, contentDescription = null, tint = if (confidenceScore!! >= 75) PrimaryGreen else WarningAmber, modifier = Modifier.size(18.dp))
+                            Icon(
+                                imageVector = if (isAiVerified) Icons.Default.AutoAwesome else Icons.Default.Receipt,
+                                contentDescription = null,
+                                tint = if (isAiVerified) PrimaryGreen else MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "OCR Confidence: $confidenceScore%",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                            Column {
+                                Text(
+                                    text = if (isAiVerified) "✨ Gemini Vision Verified ($confidenceScore%)" else "⚡ On-Device OCR ($confidenceScore%)",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                if (taxVat > 0) {
+                                    Text(
+                                        text = "Included Tax/VAT: ${CurrencyUtils.format(taxVat, currency)}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
-                        if (taxVat > 0) {
-                            Text(
-                                text = "Tax/VAT: ${CurrencyUtils.format(taxVat, currency)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+
+                        if (!isAiVerified && photoUri != null) {
+                            OutlinedButton(
+                                onClick = {
+                                    if (photoUri != null && onAnalyzeImage != null) {
+                                        isProcessingOcr = true
+                                        ocrStatusText = "Enhancing with Gemini Vision..."
+                                        onAnalyzeImage(context, photoUri!!) { aiDraft ->
+                                            if (aiDraft != null) {
+                                                applyDraft(aiDraft, fromAi = true)
+                                            } else {
+                                                isProcessingOcr = false
+                                                Toast.makeText(context, "Could not enhance: check Gemini API key", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    }
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text("Enhance ✨", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
                 Spacer(modifier = Modifier.height(14.dp))
             }
 
-            // Form Fields
+            // 1. Transaction Type Selector (Expense vs Income vs Bill/Recharge vs Transfer)
+            Text(
+                text = "Transaction Type",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val types = listOf(
+                    "EXPENSE" to "💸 Expense",
+                    "INCOME" to "💰 Income",
+                    "BILL_PAYMENT" to "⚡ Bill / Utility",
+                    "TRANSFER" to "🔄 Transfer"
+                )
+                items(types) { (key, label) ->
+                    FilterChip(
+                        selected = transactionType == key,
+                        onClick = { transactionType = key },
+                        label = { Text(label, fontSize = 12.sp, fontWeight = if (transactionType == key) FontWeight.Bold else FontWeight.Normal) },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = when (key) {
+                                "INCOME" -> PrimaryGreen
+                                "BILL_PAYMENT" -> WarningAmber
+                                else -> MaterialTheme.colorScheme.primaryContainer
+                            },
+                            selectedLabelColor = if (key == "INCOME") Color.Black else MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 2. Merchant / Payee Name Field
             OutlinedTextField(
                 value = merchant,
                 onValueChange = { merchant = it },
-                label = { Text("Merchant / Payee Name") },
+                label = { Text("Merchant / Store / Recipient Name") },
+                placeholder = { Text("e.g. KFC, Shoprite, Stephen Etse") },
                 singleLine = true,
                 shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                trailingIcon = {
+                    if (merchant.isNotBlank() && confidenceScore != null && confidenceScore!! >= 75) {
+                        Icon(Icons.Default.CheckCircle, contentDescription = "Verified", tint = PrimaryGreen, modifier = Modifier.size(18.dp))
+                    }
+                }
             )
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            // 3. Reference / Transaction ID / Token Field
+            OutlinedTextField(
+                value = referenceNumber,
+                onValueChange = { referenceNumber = it },
+                label = { Text("Reference / Txn ID / Receipt / Token #") },
+                placeholder = { Text("e.g. EAD00605119, Token: 6957...") },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth(),
+                trailingIcon = {
+                    if (referenceNumber.isNotBlank()) {
+                        IconButton(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = ClipData.newPlainText("Transaction Reference", referenceNumber)
+                                clipboard.setPrimaryClip(clip)
+                                Toast.makeText(context, "Reference copied to clipboard", Toast.LENGTH_SHORT).show()
+                            }
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = "Copy Reference", modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // 4. Amount Field
             OutlinedTextField(
                 value = amountText,
                 onValueChange = { amountText = it },
-                label = { Text("Receipt Total ($currency)") },
+                label = { Text("Total Amount ($currency)") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
                 shape = RoundedCornerShape(14.dp),
@@ -395,7 +578,7 @@ fun OcrScannerSheet(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Account Selection
+            // 5. Account Selection
             Text(
                 text = "Charge Account / Payment Method",
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
@@ -415,7 +598,7 @@ fun OcrScannerSheet(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Category Selection
+            // 6. Category Selection
             Text(
                 text = "Category",
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
@@ -435,16 +618,17 @@ fun OcrScannerSheet(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            // 7. Notes / Annotation
             OutlinedTextField(
                 value = notes,
                 onValueChange = { notes = it },
-                label = { Text("Notes / Annotations") },
-                singleLine = true,
+                label = { Text("Notes / Tokens / Details") },
+                maxLines = 3,
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             // Save Transaction Button
             val parsedAmount = amountText.toDoubleOrNull() ?: 0.0
@@ -452,16 +636,20 @@ fun OcrScannerSheet(
 
             Button(
                 onClick = {
+                    val isIncome = transactionType == "INCOME"
+                    val signedAmount = if (isIncome) parsedAmount else -parsedAmount
+
                     onSaveTransaction(
                         merchant.trim(),
-                        parsedAmount,
+                        signedAmount,
                         currency,
-                        false,
+                        isIncome,
                         selectedAccountId,
                         selectedCategoryId,
                         notes.ifBlank { null },
                         receiptTimestamp,
-                        photoFile?.absolutePath
+                        photoFile?.absolutePath,
+                        referenceNumber.trim().ifBlank { null }
                     )
                     onDismiss()
                 },
