@@ -171,15 +171,14 @@ fun SettingsScreen(
                             if (developerTaps >= 5) {
                                 showDeveloperOtaSection = true
                                 coroutineScope.launch {
-                                    snackbarHostState?.showSnackbar("Developer Mode: OTA Parser Controls Unlocked")
+                                    snackbarHostState?.showSnackbar("Developer Mode: Parser Diagnostics Unlocked")
                                 }
                             }
                         },
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainer
-                    ),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                    )
                 ) {
                     Row(
                         modifier = Modifier
@@ -189,8 +188,8 @@ fun SettingsScreen(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(52.dp)
-                                .clip(RoundedCornerShape(14.dp))
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(MaterialTheme.colorScheme.primary),
                             contentAlignment = Alignment.Center
                         ) {
@@ -198,7 +197,7 @@ fun SettingsScreen(
                                 imageVector = Icons.Default.AccountBalance,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(24.dp)
                             )
                         }
 
@@ -211,7 +210,7 @@ fun SettingsScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "Version 1.0.0 · Zero-Knowledge Offline Privacy",
+                                text = "Version 1.0.0 · Offline-First Financial Ledger",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -235,9 +234,8 @@ fun SettingsScreen(
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                 ) {
                     Column {
                         SettingsRowItem(
@@ -248,7 +246,7 @@ fun SettingsScreen(
                         )
                         HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
                         )
                         SettingsRowItem(
                             icon = Icons.Default.Category,
@@ -260,10 +258,10 @@ fun SettingsScreen(
                 }
             }
 
-            // Section 2: Automation & OS Permissions (Screen 20)
+            // Section 2: Automation & Security Preferences
             item {
                 Text(
-                    text = "AUTOMATION & PERMISSIONS",
+                    text = "PREFERENCES & AUTOMATION",
                     style = MaterialTheme.typography.labelSmall.copy(
                         letterSpacing = 1.2.sp,
                         fontWeight = FontWeight.Bold
@@ -275,27 +273,29 @@ fun SettingsScreen(
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                        // 1. SMS Background Ingestion
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primaryContainer),
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.PhoneAndroid,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
 
@@ -303,11 +303,11 @@ fun SettingsScreen(
 
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "SMS Background Receiver",
+                                    text = "Automatic SMS Tracking",
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
                                 )
                                 Text(
-                                    text = "Auto-parse MoMo & Bank SMS as soon as alerts arrive",
+                                    text = "Capture incoming MoMo and bank transaction alerts on-device",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -327,29 +327,29 @@ fun SettingsScreen(
                         }
 
                         HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 12.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
                         )
 
-                        // Scan & Sync SMS from Device Inbox
+                        // 2. Scan & Sync SMS from Device Inbox
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp),
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.secondaryContainer),
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Refresh,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.secondary,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
 
@@ -382,107 +382,59 @@ fun SettingsScreen(
                             ) {
                                 if (isSyncingInboxSms) {
                                     CircularProgressIndicator(
-                                        modifier = Modifier.size(16.dp),
+                                        modifier = Modifier.size(14.dp),
                                         strokeWidth = 2.dp,
                                         color = MaterialTheme.colorScheme.onPrimary
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text("Syncing...", fontSize = 12.sp)
                                 } else {
-                                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Sync Inbox", fontSize = 12.sp)
+                                    Text("Sync Now", fontSize = 12.sp)
                                 }
                             }
                         }
 
                         HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 12.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                        )
-
-                        // Android Automation Guide
-                        Column {
-                            Text(
-                                text = "Local Background Automation Architecture",
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "1. Enable 'SMS Background Receiver' above.\n" +
-                                        "2. Folio's on-device broadcast receiver securely inspects incoming notifications.\n" +
-                                        "3. Transactions matching MoMo, Telecel or Ghanaian Bank formats are captured into your Review Queue.\n" +
-                                        "4. Zero message content is ever transmitted off your device without explicit approval.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                lineHeight = 20.sp
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Section 3: Data, Cloud Sync & Portability (Screen 18 & 19)
-            item {
-                Text(
-                    text = "DATA & PORTABILITY",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        letterSpacing = 1.2.sp,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-                ) {
-                    Column {
-                        SettingsRowItem(
-                            icon = Icons.Default.Download,
-                            title = "Export & Encrypted Backup",
-                            subtitle = "CSV, PDF, SQLite dump and AES-256 vault backup",
-                            onClick = onOpenExportBackup
-                        )
-                        HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
                         )
-                        SettingsRowItem(
-                            icon = Icons.Default.Security,
-                            title = "Replay Onboarding & Trust Funnel",
-                            subtitle = "Review privacy agreement, currency setup, and active rails",
-                            onClick = onOpenOnboardingFunnel
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                        )
+
+                        // 3. Biometric / PIN App Lock
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primaryContainer),
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.Fingerprint, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Fingerprint,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
+
                             Spacer(modifier = Modifier.width(14.dp))
+
                             Column(modifier = Modifier.weight(1f)) {
-                                Text("Biometric / PIN App Lock", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
-                                Text("Protect expense ledger on open", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    text = "Biometric App Lock",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                                )
+                                Text(
+                                    text = "Protect expense ledger on launch",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
+
                             Switch(
                                 checked = isBiometricsEnabled,
                                 onCheckedChange = { enabled ->
@@ -502,11 +454,50 @@ fun SettingsScreen(
                 }
             }
 
-            // Section 4: Screen 21: Parser Rules Verification (Developer)
-            if (showDeveloperOtaSection || developerTaps >= 3) {
+            // Section 3: Data, Cloud Sync & Portability
+            item {
+                Text(
+                    text = "DATA & PORTABILITY",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        letterSpacing = 1.2.sp,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                ) {
+                    Column {
+                        SettingsRowItem(
+                            icon = Icons.Default.Download,
+                            title = "Export & Encrypted Vault",
+                            subtitle = "CSV, PDF, SQLite dump and AES-256 vault backup",
+                            onClick = onOpenExportBackup
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+                        )
+                        SettingsRowItem(
+                            icon = Icons.Default.Security,
+                            title = "Privacy & Setup Guide",
+                            subtitle = "Review zero-knowledge architecture, currency setup, and active rails",
+                            onClick = onOpenOnboardingFunnel
+                        )
+                    }
+                }
+            }
+
+            // Section 4: Screen 21: Parser Rules Verification (Developer Only)
+            if (showDeveloperOtaSection) {
                 item {
                     Text(
-                        text = "PARSER RULES ENGINE (DEVELOPER)",
+                        text = "PARSER RULES ENGINE (DIAGNOSTICS)",
                         style = MaterialTheme.typography.labelSmall.copy(
                             letterSpacing = 1.2.sp,
                             fontWeight = FontWeight.Bold
@@ -518,9 +509,8 @@ fun SettingsScreen(
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(
@@ -528,7 +518,7 @@ fun SettingsScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column {
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text("Deterministic Parser Rules", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold))
                                     Text("Rule DB v2.4 · 15 active MoMo & Bank format patterns", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
@@ -542,16 +532,12 @@ fun SettingsScreen(
                                         }
                                     },
                                     enabled = !isCheckingUpdates,
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                        contentColor = MaterialTheme.colorScheme.onPrimary
-                                    )
+                                    shape = RoundedCornerShape(10.dp)
                                 ) {
                                     if (isCheckingUpdates) {
-                                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                                        CircularProgressIndicator(modifier = Modifier.size(14.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
                                     } else {
-                                        Text("Verify Rules")
+                                        Text("Verify Rules", fontSize = 12.sp)
                                     }
                                 }
                             }
@@ -575,9 +561,8 @@ fun SettingsScreen(
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                 ) {
                     Column {
                         SettingsRowItem(
@@ -588,7 +573,7 @@ fun SettingsScreen(
                         )
                         HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
                         )
                         SettingsRowItem(
                             icon = Icons.Default.DeleteForever,
@@ -667,16 +652,16 @@ private fun SettingsRowItem(
     ) {
         Box(
             modifier = Modifier
-                .size(38.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .size(36.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = iconTint ?: MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(20.dp)
+                tint = iconTint ?: MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp)
             )
         }
 

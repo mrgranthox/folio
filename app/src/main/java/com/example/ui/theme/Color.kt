@@ -10,14 +10,14 @@ val M3PrimaryDark = Color(0xFF818CF8)
 val M3OnPrimaryLight = Color(0xFFFFFFFF)
 val M3OnPrimaryDark = Color(0xFF111827)
 
-val M3SurfaceLight = Color(0xFFF9FAFB)
-val M3SurfaceDark = Color(0xFF121212)
+val M3SurfaceLight = Color(0xFFF4F5F7)
+val M3SurfaceDark = Color(0xFF101216)
 
 val M3SurfaceContainerLight = Color(0xFFFFFFFF)
-val M3SurfaceContainerDark = Color(0xFF1E1E1E)
+val M3SurfaceContainerDark = Color(0xFF1C1F26)
 
-val M3SurfaceContainerHighLight = Color(0xFFF3F4F6)
-val M3SurfaceContainerHighDark = Color(0xFF2D2D2D)
+val M3SurfaceContainerHighLight = Color(0xFFEAECEF)
+val M3SurfaceContainerHighDark = Color(0xFF262A34)
 
 val M3OnSurfaceLight = Color(0xFF111827)
 val M3OnSurfaceDark = Color(0xFFF9FAFB)

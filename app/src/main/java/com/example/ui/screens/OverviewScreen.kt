@@ -35,6 +35,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -107,11 +108,10 @@ fun OverviewScreen(
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainer
-                    ),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+                    )
                 ) {
                     Column(
                         modifier = Modifier
@@ -293,13 +293,12 @@ fun OverviewScreen(
                     ) {
                         items(state.accounts) { account ->
                             val spent = state.accountSpendMap[account.id] ?: 0.0
-                            OutlinedCard(
+                            Card(
                                 modifier = Modifier.width(160.dp),
-                                shape = RoundedCornerShape(14.dp),
-                                colors = CardDefaults.outlinedCardColors(
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceContainer
-                                ),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                                )
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -389,8 +388,7 @@ fun OverviewScreen(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainer
                         ),
-                        shape = RoundedCornerShape(14.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                        shape = RoundedCornerShape(16.dp)
                     ) {
                         Box(
                             modifier = Modifier
@@ -408,28 +406,23 @@ fun OverviewScreen(
                 }
             } else {
                 item {
-                    Column(
+                    Card(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer
+                        )
                     ) {
-                        recentTransactions.forEach { tx ->
-                            val isIncome = tx.isIncome
-                            val amountColor = if (isIncome) CreditGreen else DebitRed
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            recentTransactions.forEachIndexed { index, tx ->
+                                val isIncome = tx.isIncome
+                                val amountColor = if (isIncome) CreditGreen else DebitRed
 
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onTransactionClick(tx) },
-                                shape = RoundedCornerShape(14.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainer
-                                ),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-                            ) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                        .clickable { onTransactionClick(tx) }
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     CategoryIconBadge(
@@ -475,6 +468,13 @@ fun OverviewScreen(
                                             )
                                         }
                                     }
+                                }
+
+                                if (index < recentTransactions.size - 1) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
+                                    )
                                 }
                             }
                         }

@@ -258,7 +258,6 @@ fun FolioAiChatSheet(
                 Surface(
                     color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                     shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 4.dp)
@@ -315,7 +314,7 @@ fun FolioAiChatSheet(
                         colors = FilterChipDefaults.filterChipColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainer
                         ),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+                        border = null
                     )
                 }
             }
@@ -358,8 +357,7 @@ fun FolioAiChatSheet(
                             Spacer(modifier = Modifier.width(8.dp))
                             Surface(
                                 shape = RoundedCornerShape(14.dp),
-                                color = MaterialTheme.colorScheme.surfaceContainer,
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+                                color = MaterialTheme.colorScheme.surfaceContainer
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -490,8 +488,7 @@ private fun ChatBubble(message: ChatMessage) {
             ),
             color = if (message.isUser) MaterialTheme.colorScheme.primary
             else MaterialTheme.colorScheme.surfaceContainer,
-            border = if (!message.isUser) BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
-            else null,
+            border = null,
             modifier = Modifier.widthIn(max = if (message.isUser) 300.dp else 340.dp)
         ) {
             Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {

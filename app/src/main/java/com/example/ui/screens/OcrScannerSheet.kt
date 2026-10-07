@@ -421,10 +421,6 @@ fun OcrScannerSheet(
                     shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = if (isAiVerified) PrimaryGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
-                    ),
-                    border = BorderStroke(
-                        1.dp,
-                        if (isAiVerified) PrimaryGreen.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
                     )
                 ) {
                     Row(
@@ -444,7 +440,7 @@ fun OcrScannerSheet(
                             Spacer(modifier = Modifier.width(8.dp))
                             Column {
                                 Text(
-                                    text = if (isAiVerified) "✨ Gemini Vision Verified ($confidenceScore%)" else "⚡ On-Device OCR ($confidenceScore%)",
+                                    text = if (isAiVerified) "Gemini Vision Verified ($confidenceScore%)" else "On-Device OCR ($confidenceScore%)",
                                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
@@ -478,7 +474,7 @@ fun OcrScannerSheet(
                                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                                 modifier = Modifier.height(32.dp)
                             ) {
-                                Text("Enhance ✨", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Enhance", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -495,10 +491,10 @@ fun OcrScannerSheet(
             Spacer(modifier = Modifier.height(6.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val types = listOf(
-                    "EXPENSE" to "💸 Expense",
-                    "INCOME" to "💰 Income",
-                    "BILL_PAYMENT" to "⚡ Bill / Utility",
-                    "TRANSFER" to "🔄 Transfer"
+                    "EXPENSE" to "Expense",
+                    "INCOME" to "Income",
+                    "BILL_PAYMENT" to "Bill / Utility",
+                    "TRANSFER" to "Transfer"
                 )
                 items(types) { (key, label) ->
                     FilterChip(

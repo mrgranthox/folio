@@ -234,8 +234,7 @@ fun QuickPasteSmsDialog(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(
@@ -498,11 +497,6 @@ fun QuickPasteSmsDialog(
                                 shape = RoundedCornerShape(14.dp),
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceContainer
-                                ),
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (parsedResult.isFinancial) CreditGreen.copy(alpha = 0.5f)
-                                    else WarningAmber.copy(alpha = 0.5f)
                                 )
                             ) {
                                 Column(modifier = Modifier.padding(14.dp)) {

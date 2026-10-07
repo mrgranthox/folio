@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -37,10 +38,12 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import com.example.data.model.AccountType
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults
@@ -187,7 +190,6 @@ fun AnalyticsScreen(
                 Surface(
                     shape = RoundedCornerShape(14.dp),
                     color = MaterialTheme.colorScheme.surfaceContainer,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -234,9 +236,8 @@ fun AnalyticsScreen(
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                         ) {
                             Column(
                                 modifier = Modifier.padding(16.dp),
@@ -285,12 +286,12 @@ fun AnalyticsScreen(
                         )
                     }
 
-                    // Category List - Separated by 2px!
+                    // Category List
                     item {
                         if (state.categorySpendList.isEmpty()) {
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(16.dp),
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                             ) {
                                 Box(modifier = Modifier.padding(20.dp), contentAlignment = Alignment.Center) {
@@ -302,22 +303,17 @@ fun AnalyticsScreen(
                                 }
                             }
                         } else {
-                            Column(
+                            Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                             ) {
-                                state.categorySpendList.forEach { item ->
-                                    val catColor = parseColorHex(item.category.colorHex)
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(12.dp),
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
-                                    ) {
+                                Column {
+                                    state.categorySpendList.forEachIndexed { index, item ->
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                                                .padding(horizontal = 16.dp, vertical = 12.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             CategoryIconBadge(
@@ -327,7 +323,7 @@ fun AnalyticsScreen(
                                                 size = 36.dp,
                                                 iconSize = 16.dp
                                             )
-                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Spacer(modifier = Modifier.width(12.dp))
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(
                                                     text = item.category.name,
@@ -355,6 +351,12 @@ fun AnalyticsScreen(
                                                 }
                                             }
                                         }
+                                        if (index < state.categorySpendList.lastIndex) {
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(horizontal = 16.dp),
+                                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -373,12 +375,12 @@ fun AnalyticsScreen(
                         )
                     }
 
-                    // Top Merchants - Separated by 2px!
+                    // Top Merchants
                     item {
                         if (merchantLeaderboard.isEmpty()) {
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(16.dp),
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                             ) {
                                 Box(modifier = Modifier.padding(20.dp), contentAlignment = Alignment.Center) {
@@ -390,22 +392,18 @@ fun AnalyticsScreen(
                                 }
                             }
                         } else {
-                            Column(
+                            Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                             ) {
-                                merchantLeaderboard.forEachIndexed { rankIndex, (merchant, total, meta) ->
-                                    val (txCount, avgTx) = meta
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(12.dp),
-                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
-                                    ) {
+                                Column {
+                                    merchantLeaderboard.forEachIndexed { rankIndex, (merchant, total, meta) ->
+                                        val (txCount, avgTx) = meta
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                                                .padding(horizontal = 16.dp, vertical = 12.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             // Rank Badge
@@ -425,7 +423,7 @@ fun AnalyticsScreen(
                                                 )
                                             }
 
-                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Spacer(modifier = Modifier.width(12.dp))
 
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(
@@ -448,6 +446,12 @@ fun AnalyticsScreen(
                                                 color = DebitRed
                                             )
                                         }
+                                        if (rankIndex < merchantLeaderboard.lastIndex) {
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(horizontal = 16.dp),
+                                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -466,20 +470,16 @@ fun AnalyticsScreen(
                         )
                     }
 
-                    // Payment Rails - Separated by 2px!
+                    // Payment Rails
                     item {
-                        Column(
+                        Card(
                             modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                         ) {
-                            railSpendList.forEach { (railName, total, pct) ->
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
-                                ) {
-                                    Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                            Column {
+                                railSpendList.forEachIndexed { index, (railName, total, pct) ->
+                                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -492,7 +492,7 @@ fun AnalyticsScreen(
                                                     tint = MaterialTheme.colorScheme.primary,
                                                     modifier = Modifier.size(16.dp)
                                                 )
-                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Spacer(modifier = Modifier.width(8.dp))
                                                 Text(
                                                     text = railName,
                                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -516,6 +516,12 @@ fun AnalyticsScreen(
                                             trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
                                         )
                                     }
+                                    if (index < railSpendList.lastIndex) {
+                                        HorizontalDivider(
+                                            modifier = Modifier.padding(horizontal = 16.dp),
+                                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -527,105 +533,213 @@ fun AnalyticsScreen(
                     // TAB 2: TRENDS & RHYTHM
                     // ==========================================
 
-                    // Spend Velocity Grid (Horizontally scrollable to avoid truncation on smaller devices)
+                    // Header: Velocity & Run-rate
                     item {
-                        LazyRow(
+                        Text(
+                            text = "FINANCIAL VELOCITY & RUN-RATE",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                letterSpacing = 1.2.sp,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    // 1. Month-over-Month & Daily Run-rate Row
+                    item {
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            // Avg Ticket Size
-                            item {
-                                Card(
-                                    modifier = Modifier.width(145.dp),
-                                    shape = RoundedCornerShape(14.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
-                                ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Default.Speed, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text("Avg Ticket", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = CurrencyUtils.format(avgTicketSize, state.preferredCurrency),
-                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                            color = MaterialTheme.colorScheme.onSurface
+                            // Card 1: Month-over-Month Growth (unambiguous, never "MoM" or "MON")
+                            val momDiff = state.thisMonthOutflow - state.lastMonthOutflow
+                            val isHigher = momDiff > 0
+                            Card(
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            if (isHigher) Icons.AutoMirrored.Filled.TrendingUp else Icons.AutoMirrored.Filled.TrendingDown,
+                                            contentDescription = null,
+                                            tint = if (isHigher) DebitRed else CreditGreen,
+                                            modifier = Modifier.size(16.dp)
                                         )
+                                        Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = "$outflowCount purchases",
-                                            style = MaterialTheme.typography.labelSmall,
+                                            "Month-over-Month",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = "${if (isHigher) "+" else if (momDiff < 0) "-" else ""}${CurrencyUtils.format(abs(momDiff), state.preferredCurrency)}",
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = if (isHigher) DebitRed else CreditGreen,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    val momPctText = if (state.lastMonthOutflow > 0) {
+                                        val pct = abs(state.outflowVariancePct)
+                                        if (isHigher) "+${String.format("%.1f", pct)}% vs last month"
+                                        else "-${String.format("%.1f", pct)}% vs last month"
+                                    } else {
+                                        "vs previous month"
+                                    }
+                                    Text(
+                                        text = momPctText,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
 
-                            // Daily Burn Rate
-                            item {
-                                Card(
-                                    modifier = Modifier.width(145.dp),
-                                    shape = RoundedCornerShape(14.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
-                                ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Default.DateRange, contentDescription = null, tint = WarningOrange, modifier = Modifier.size(14.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text("Daily Burn", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
-                                        Spacer(modifier = Modifier.height(4.dp))
+                            // Card 2: Daily Burn & End-of-Month Projection
+                            val cal = Calendar.getInstance()
+                            val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+                            val projectedMonthSpend = state.avgDailyExpense * daysInMonth
+                            Card(
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Default.Speed,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = CurrencyUtils.format(state.avgDailyExpense, state.preferredCurrency),
-                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                            "Daily Run-Rate",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = CurrencyUtils.format(state.avgDailyExpense, state.preferredCurrency),
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "Proj: ${CurrencyUtils.format(projectedMonthSpend, state.preferredCurrency)}/mo",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Card 3: Dedicated Mobile Money (MoMo) Volume & Rails
+                    item {
+                        val momoTxs = filteredOutflows.filter { tx ->
+                            tx.accountRail?.contains("momo", ignoreCase = true) == true ||
+                            tx.accountRail?.contains("mtn", ignoreCase = true) == true ||
+                            tx.accountRail?.contains("telecel", ignoreCase = true) == true ||
+                            state.accounts.firstOrNull { it.id == tx.accountId }?.type == AccountType.MOMO
+                        }
+                        val momoSpend = momoTxs.sumOf { abs(it.amount) }
+                        val momoShare = if (totalPeriodOutflow > 0) (momoSpend / totalPeriodOutflow).toFloat() else 0f
+                        val otherSpend = (totalPeriodOutflow - momoSpend).coerceAtLeast(0.0)
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Default.CreditCard,
+                                            contentDescription = null,
+                                            tint = WarningOrange,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            "Mobile Money (MoMo) Volume",
+                                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    Text(
+                                        text = "${String.format("%.0f", momoShare * 100)}% of total",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = CurrencyUtils.format(momoSpend, state.preferredCurrency),
+                                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
                                         Text(
-                                            text = "Per active day",
+                                            text = "${momoTxs.size} Mobile Money transaction${if (momoTxs.size != 1) "s" else ""}",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Text(
+                                            text = "Bank & Cash",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = CurrencyUtils.format(otherSpend, state.preferredCurrency),
+                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                     }
                                 }
-                            }
 
-                            // MoM Numerical Change
-                            item {
-                                Card(
-                                    modifier = Modifier.width(155.dp),
-                                    shape = RoundedCornerShape(14.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(8.dp)
+                                        .clip(RoundedCornerShape(4.dp))
                                 ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
-                                        val momDiff = state.thisMonthOutflow - state.lastMonthOutflow
-                                        val isHigher = momDiff > 0
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                if (isHigher) Icons.AutoMirrored.Filled.TrendingUp else Icons.AutoMirrored.Filled.TrendingDown,
-                                                contentDescription = null,
-                                                tint = if (isHigher) DebitRed else CreditGreen,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text("MoM Change", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = "${if (isHigher) "+" else if (momDiff < 0) "-" else ""}${CurrencyUtils.format(abs(momDiff), state.preferredCurrency)}",
-                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                            color = if (isHigher) DebitRed else CreditGreen,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = if (isHigher) "vs last month" else "saved vs last mo",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(momoShare.coerceAtLeast(0.01f))
+                                            .fillMaxHeight()
+                                            .background(WarningOrange)
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .weight((1f - momoShare).coerceAtLeast(0.01f))
+                                            .fillMaxHeight()
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                                    )
                                 }
                             }
                         }
@@ -635,9 +749,8 @@ fun AnalyticsScreen(
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Row(
@@ -680,9 +793,8 @@ fun AnalyticsScreen(
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
@@ -751,9 +863,8 @@ fun AnalyticsScreen(
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Row(
@@ -830,75 +941,93 @@ fun AnalyticsScreen(
                         )
                     }
 
-                    // Category Budgets - Separated by 2px!
+                    // Category Budgets - Unified Container Card
                     item {
-                        Column(
+                        Card(
                             modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                         ) {
-                            state.categorySpendList.forEach { item ->
-                                val catColor = parseColorHex(item.category.colorHex)
-                                val limit = item.budgetLimit ?: 0.0
-                                val hasBudget = limit > 0
-
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+                            if (state.categorySpendList.isEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(24.dp),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Column(modifier = Modifier.padding(14.dp)) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            CategoryIconBadge(
-                                                categoryName = item.category.name,
-                                                iconKey = item.category.icon,
-                                                colorHex = item.category.colorHex,
-                                                size = 36.dp,
-                                                iconSize = 16.dp
-                                            )
-                                            Spacer(modifier = Modifier.width(10.dp))
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    text = item.category.name,
-                                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                                    color = MaterialTheme.colorScheme.onSurface
+                                    Text(
+                                        text = "No category budgets configured",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            } else {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    state.categorySpendList.forEachIndexed { index, item ->
+                                        val catColor = parseColorHex(item.category.colorHex)
+                                        val limit = item.budgetLimit ?: 0.0
+                                        val hasBudget = limit > 0
+
+                                        Column(modifier = Modifier.padding(14.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                CategoryIconBadge(
+                                                    categoryName = item.category.name,
+                                                    iconKey = item.category.icon,
+                                                    colorHex = item.category.colorHex,
+                                                    size = 36.dp,
+                                                    iconSize = 16.dp
                                                 )
-                                                Text(
-                                                    text = if (hasBudget) "Target: ${CurrencyUtils.format(limit, state.preferredCurrency)}" else "No target configured",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                            Column(horizontalAlignment = Alignment.End) {
-                                                Text(
-                                                    text = CurrencyUtils.format(item.totalSpend, state.preferredCurrency),
-                                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                                    color = MaterialTheme.colorScheme.onSurface
-                                                )
-                                                if (hasBudget) {
-                                                    val remaining = limit - item.totalSpend
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
                                                     Text(
-                                                        text = if (remaining >= 0) "${CurrencyUtils.format(remaining, state.preferredCurrency)} left" else "${CurrencyUtils.format(abs(remaining), state.preferredCurrency)} over",
-                                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                                        color = if (remaining >= 0) CreditGreen else DebitRed
+                                                        text = item.category.name,
+                                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                    Text(
+                                                        text = if (hasBudget) "Target: ${CurrencyUtils.format(limit, state.preferredCurrency)}" else "No target configured",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                                     )
                                                 }
+                                                Column(horizontalAlignment = Alignment.End) {
+                                                    Text(
+                                                        text = CurrencyUtils.format(item.totalSpend, state.preferredCurrency),
+                                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                    if (hasBudget) {
+                                                        val remaining = limit - item.totalSpend
+                                                        Text(
+                                                            text = if (remaining >= 0) "${CurrencyUtils.format(remaining, state.preferredCurrency)} left" else "${CurrencyUtils.format(abs(remaining), state.preferredCurrency)} over",
+                                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                            color = if (remaining >= 0) CreditGreen else DebitRed
+                                                        )
+                                                    }
+                                                }
+                                            }
+
+                                            if (hasBudget) {
+                                                Spacer(modifier = Modifier.height(8.dp))
+                                                LinearProgressIndicator(
+                                                    progress = { item.budgetProgress.toFloat().coerceIn(0f, 1f) },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .height(5.dp)
+                                                        .clip(RoundedCornerShape(3.dp)),
+                                                    color = if (item.isOverBudget) DebitRed else catColor,
+                                                    trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                                )
                                             }
                                         }
 
-                                        if (hasBudget) {
-                                            Spacer(modifier = Modifier.height(8.dp))
-                                            LinearProgressIndicator(
-                                                progress = { item.budgetProgress.toFloat().coerceIn(0f, 1f) },
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .height(5.dp)
-                                                    .clip(RoundedCornerShape(3.dp)),
-                                                color = if (item.isOverBudget) DebitRed else catColor,
-                                                trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                        if (index < state.categorySpendList.size - 1) {
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(horizontal = 14.dp),
+                                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
                                             )
                                         }
                                     }

@@ -283,13 +283,9 @@ fun MainAppShell(
                         .fillMaxWidth()
                         .widthIn(max = 520.dp),
                     shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
-                    tonalElevation = 0.dp,
-                    shadowElevation = 0.dp,
-                    border = BorderStroke(
-                        1.dp,
-                        MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
-                    )
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    tonalElevation = 3.dp,
+                    shadowElevation = 8.dp
                 ) {
                     Row(
                         modifier = Modifier

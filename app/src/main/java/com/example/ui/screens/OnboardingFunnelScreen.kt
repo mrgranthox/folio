@@ -323,8 +323,7 @@ private fun ZeroKnowledgePrivacyScreen(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainer
-                ),
-                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                )
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     Text(
@@ -468,10 +467,7 @@ private fun RegionalCurrencyScreen(
                             containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
                             else MaterialTheme.colorScheme.surfaceContainer
                         ),
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                        )
+                        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null
                     ) {
                         Row(
                             modifier = Modifier
@@ -571,10 +567,7 @@ private fun InitialAccountConfigScreen(
                             containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
                             else MaterialTheme.colorScheme.surfaceContainer
                         ),
-                        border = androidx.compose.foundation.BorderStroke(
-                            if (isSelected) 2.dp else 1.dp,
-                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                        )
+                        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null
                     ) {
                         Row(
                             modifier = Modifier

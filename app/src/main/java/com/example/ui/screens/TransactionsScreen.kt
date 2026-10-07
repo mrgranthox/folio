@@ -349,7 +349,7 @@ fun TransactionsScreen(
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp, top = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     val isAmountSorted = state.selectedSort == SortOrder.AMOUNT_DESC || state.selectedSort == SortOrder.AMOUNT_ASC
 
@@ -416,8 +416,7 @@ private fun TransactionCardItem(
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
-        ),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        )
     ) {
         Row(
             modifier = Modifier

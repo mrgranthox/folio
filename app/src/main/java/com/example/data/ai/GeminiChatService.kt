@@ -39,9 +39,9 @@ class GeminiChatService {
         }
 
         if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
-            return@withContext "💡 **Live Gemini AI requires an API Key**\n\n" +
-                    "The responses are NOT hardcoded—Folio connects directly to Google's `gemini-2.5-flash` model. However, an API key is required to make live calls.\n\n" +
-                    "👉 Tap the **Key icon (🔑)** in the top right of this chat or the banner below to paste your free Gemini API Key (or set it in AI Studio Secrets).\n\n" +
+            return@withContext "**Live Gemini AI requires an API Key**\n\n" +
+                    "Folio connects directly to Google's `gemini-2.5-flash` model. However, an API key is required to make live calls.\n\n" +
+                    "Tap the API Key action in the top right of this chat or the banner below to configure your Gemini API Key.\n\n" +
                     "**Your Current Accounts Snapshot:**\n$fallbackDataSummary"
         }
 
@@ -91,7 +91,7 @@ class GeminiChatService {
                 } catch (_: Exception) {
                     "HTTP ${response.code}"
                 }
-                return@withContext "⚠️ **Gemini Service Notice** ($errorMsg)\n\n" +
+                return@withContext "**Gemini Service Notice** ($errorMsg)\n\n" +
                         "Here is what your local data shows:\n\n$fallbackDataSummary"
             }
 
@@ -108,7 +108,7 @@ class GeminiChatService {
                 "I was unable to process that query. Here is a summary of your accounts:\n\n$fallbackDataSummary"
             }
         } catch (e: Exception) {
-            "⚠️ **Connection Notice**: Could not reach Gemini servers (${e.localizedMessage ?: "Network error"}).\n\n" +
+            "**Connection Notice**: Could not reach Gemini servers (${e.localizedMessage ?: "Network error"}).\n\n" +
                     "Your financial data summary:\n\n$fallbackDataSummary"
         }
     }
