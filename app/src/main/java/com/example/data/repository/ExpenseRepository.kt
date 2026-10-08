@@ -260,8 +260,18 @@ class ExpenseRepository(context: Context) {
                     Pair(ReconciliationOutcome.AUTO_MERGED, "Auto-merged with existing record (${candidateTx.counterparty})")
                 }
                 ReconciliationOutcome.QUEUED_FOR_REVIEW -> {
-                    eval.candidateForQueue?.let { duplicateDao.insertDuplicate(it) }
-                    Pair(ReconciliationOutcome.QUEUED_FOR_REVIEW, "Queued to Duplicate Review Queue (${eval.matchScore}% match)")
+                    eval.candidateForQueue?.let { cand ->
+                        val existingDuplicates = duplicateDao.getAllDuplicatesList()
+                        val alreadyQueued = existingDuplicates.any {
+                            it.existingTransactionId == cand.existingTransactionId &&
+                            !it.importedExternalRef.isNullOrBlank() &&
+                            it.importedExternalRef.equals(cand.importedExternalRef, ignoreCase = true)
+                        }
+                        if (!alreadyQueued) {
+                            duplicateDao.insertDuplicate(cand)
+                        }
+                    }
+                    Pair(ReconciliationOutcome.QUEUED_FOR_REVIEW, "Queued to Review Queue (${eval.matchScore}% match)")
                 }
                 ReconciliationOutcome.INSERTED_NEW -> {
                     transactionDao.insertTransaction(candidateTx)
@@ -331,6 +341,18 @@ class ExpenseRepository(context: Context) {
     }
 
     // --- Duplicate Queue Actions ---
+    suspend fun addDuplicate(duplicate: DuplicateEntity) = withContext(Dispatchers.IO) {
+        val existingDuplicates = duplicateDao.getAllDuplicatesList()
+        val alreadyQueued = existingDuplicates.any {
+            it.existingTransactionId == duplicate.existingTransactionId &&
+            !it.importedExternalRef.isNullOrBlank() &&
+            it.importedExternalRef.equals(duplicate.importedExternalRef, ignoreCase = true)
+        }
+        if (!alreadyQueued) {
+            duplicateDao.insertDuplicate(duplicate)
+        }
+    }
+
     suspend fun mergeDuplicate(item: DuplicateCandidateItem) = withContext(Dispatchers.IO) {
         val merged = item.existingTransaction.copy(
             receiptImagePath = item.importedTransaction.receiptImagePath ?: item.existingTransaction.receiptImagePath,

@@ -22,22 +22,76 @@ data class ReconciliationResult(
 
 class ReconciliationEngine {
 
+    private fun isTransactionIdMatch(ref1: String?, ref2: String?): Boolean {
+        if (ref1.isNullOrBlank() || ref2.isNullOrBlank()) return false
+        val clean1 = ref1.trim().trim('.', ',', ';', ':', '-', ' ').lowercase()
+        val clean2 = ref2.trim().trim('.', ',', ';', ':', '-', ' ').lowercase()
+        if (clean1 == clean2) return true
+
+        // Clean out common prefixes like "tnx:", "txn:", "ref:"
+        val stripped1 = clean1.replace(Regex("^(?:tnx|txn|ref|trx|transaction|trans)\\s*[:.]?\\s*"), "")
+        val stripped2 = clean2.replace(Regex("^(?:tnx|txn|ref|trx|transaction|trans)\\s*[:.]?\\s*"), "")
+        if (stripped1 == stripped2 && stripped1.length >= 4) return true
+
+        if (clean1.length >= 6 && clean2.length >= 6) {
+            if (clean1.contains(clean2) || clean2.contains(clean1)) return true
+            val digits1 = clean1.filter { it.isDigit() }
+            val digits2 = clean2.filter { it.isDigit() }
+            if (digits1.length >= 6 && digits2.length >= 6 && digits1 == digits2) return true
+        }
+
+        return false
+    }
+
     fun evaluate(
         incoming: TransactionEntity,
         existingTransactions: List<TransactionEntity>
     ): ReconciliationResult {
         // ------------------------------------------------------------------------
-        // TIER 1: Deterministic Deduplication (Hard Matching by externalRef)
+        // TIER 1: Transaction ID / Reference ID Hard Matching (TNX ID, Transaction ID)
+        // Strictly looks at transaction ID / reference ID, ignoring differences in amount.
         // ------------------------------------------------------------------------
         if (!incoming.externalRef.isNullOrBlank()) {
-            val hardMatch = existingTransactions.any { t ->
-                !t.isDeleted && !t.externalRef.isNullOrBlank() && t.externalRef.equals(incoming.externalRef, ignoreCase = true)
+            val incomingRef = incoming.externalRef!!
+            val hardMatch = existingTransactions.firstOrNull { t ->
+                if (t.isDeleted) return@firstOrNull false
+                if (isTransactionIdMatch(incomingRef, t.externalRef)) return@firstOrNull true
+                if (!t.notes.isNullOrBlank() && isTransactionIdMatch(incomingRef, t.notes)) return@firstOrNull true
+                false
             }
-            if (hardMatch) {
-                return ReconciliationResult(
-                    outcome = ReconciliationOutcome.IDEMPOTENT_SKIP,
+            if (hardMatch != null) {
+                val candidate = DuplicateEntity(
+                    id = "dup-${UUID.randomUUID()}",
+                    existingTransactionId = hardMatch.id,
+                    importedExternalRef = incoming.externalRef,
+                    importedAccountId = incoming.accountId,
+                    importedCategoryId = incoming.categoryId,
+                    importedAmount = incoming.amount,
+                    importedCurrency = incoming.currency,
+                    importedDirection = incoming.direction,
+                    importedType = incoming.type,
+                    importedTimestamp = incoming.timestamp,
+                    importedCounterparty = incoming.counterparty,
+                    importedSourceMethod = incoming.sourceMethod,
+                    importedNotes = incoming.notes,
+                    importedReceiptImagePath = incoming.receiptImagePath,
+                    importedAccountRail = incoming.accountRail,
                     matchScore = 100,
-                    matchFactors = listOf("Exact External Ref match: ${incoming.externalRef}")
+                    matchFactors = "Identical Transaction ID: ${incoming.externalRef}"
+                )
+                return ReconciliationResult(
+                    outcome = ReconciliationOutcome.QUEUED_FOR_REVIEW,
+                    candidateForQueue = candidate,
+                    matchScore = 100,
+                    matchFactors = listOf("Identical Transaction ID: ${incoming.externalRef}")
+                )
+            } else {
+                // If Transaction ID is present and unique, it is NOT a duplicate!
+                return ReconciliationResult(
+                    outcome = ReconciliationOutcome.INSERTED_NEW,
+                    resolvedTransaction = incoming,
+                    matchScore = 0,
+                    matchFactors = listOf("Unique Transaction ID: ${incoming.externalRef}")
                 )
             }
         }

@@ -28,7 +28,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Download
@@ -48,9 +50,11 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -73,10 +77,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.ui.components.CurrencyUtils
+import com.example.ui.theme.CreditGreen
 import com.example.ui.theme.DebitRed
 import com.example.ui.theme.InfoBlue
 import com.example.ui.theme.M3PrimaryLight
-import com.example.ui.theme.CreditGreen
+import com.example.ui.theme.PrimaryGreen
 import com.example.ui.viewmodel.ExpenseUiState
 import kotlinx.coroutines.launch
 
@@ -95,10 +100,10 @@ fun SettingsScreen(
     state: ExpenseUiState,
     onOpenAccounts: () -> Unit,
     onOpenCategories: () -> Unit,
-    onOpenExportBackup: () -> Unit,
-    onResetDemoData: () -> Unit,
-    onClearAllData: () -> Unit,
-    onOpenOnboardingFunnel: () -> Unit = {},
+    onExportBackup: () -> Unit = {},
+    onResetDemoData: () -> Unit = {},
+    onClearAllData: () -> Unit = {},
+    onOpenPrivacyTerms: () -> Unit = {},
     isSyncingInboxSms: Boolean = false,
     onSyncInboxSms: () -> Unit = {},
     snackbarHostState: SnackbarHostState? = null,
@@ -107,11 +112,12 @@ fun SettingsScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
-    var showResetConfirm by remember { mutableStateOf(false) }
-    var showClearConfirm by remember { mutableStateOf(false) }
     val securityPrefs = remember { context.getSharedPreferences("folio_security_prefs", Context.MODE_PRIVATE) }
     var isBiometricsEnabled by remember {
         mutableStateOf(securityPrefs.getBoolean("biometrics_enabled", false))
+    }
+    var isAutomaticSmsTrackingEnabled by remember {
+        mutableStateOf(securityPrefs.getBoolean("automatic_sms_tracking", true))
     }
 
     // Automation Settings (Screen 20)
@@ -125,6 +131,10 @@ fun SettingsScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         smsReceiverPermissionGranted = isGranted
+        if (isGranted) {
+            isAutomaticSmsTrackingEnabled = true
+            securityPrefs.edit().putBoolean("automatic_sms_tracking", true).apply()
+        }
         coroutineScope.launch {
             snackbarHostState?.showSnackbar(
                 if (isGranted) "SMS background listener enabled." else "SMS permission was denied."
@@ -161,6 +171,45 @@ fun SettingsScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Scrollable Page Header (Settings)
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp, bottom = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Settings",
+                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        Text(
+                            text = "Preferences & Data Automation",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onSyncInboxSms,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceContainer)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Sync",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+
             // App branding banner
             item {
                 Card(
@@ -277,53 +326,111 @@ fun SettingsScreen(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                 ) {
                     Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                        // 1. SMS Background Ingestion
-                        Row(
+                        // 1. Automatic SMS Tracking
+                        val isSmsActive = isAutomaticSmsTrackingEnabled
+                        val handleToggleSms: (Boolean) -> Unit = { enable ->
+                            isAutomaticSmsTrackingEnabled = enable
+                            securityPrefs.edit().putBoolean("automatic_sms_tracking", enable).apply()
+                            if (enable) {
+                                val hasPerm = ContextCompat.checkSelfPermission(context, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED
+                                if (!hasPerm) {
+                                    smsPermissionLauncher.launch(Manifest.permission.RECEIVE_SMS)
+                                } else {
+                                    smsReceiverPermissionGranted = true
+                                    coroutineScope.launch { snackbarHostState?.showSnackbar("Automatic SMS tracking enabled.") }
+                                }
+                            } else {
+                                coroutineScope.launch { snackbarHostState?.showSnackbar("Automatic SMS tracking disabled.") }
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isSmsActive) PrimaryGreen.copy(alpha = 0.08f) else Color.Transparent,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
-                            Box(
+                            Row(
                                 modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-                                contentAlignment = Alignment.Center
+                                    .fillMaxWidth()
+                                    .clickable { handleToggleSms(!isSmsActive) }
+                                    .padding(horizontal = 10.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.PhoneAndroid,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(
+                                            if (isSmsActive) PrimaryGreen.copy(alpha = 0.18f)
+                                            else MaterialTheme.colorScheme.surfaceVariant
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PhoneAndroid,
+                                        contentDescription = null,
+                                        tint = if (isSmsActive) PrimaryGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
 
-                            Spacer(modifier = Modifier.width(14.dp))
+                                Spacer(modifier = Modifier.width(14.dp))
 
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Automatic SMS Tracking",
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
-                                )
-                                Text(
-                                    text = "Capture incoming MoMo and bank transaction alerts on-device",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-
-                            Switch(
-                                checked = smsReceiverPermissionGranted,
-                                onCheckedChange = { enable ->
-                                    if (enable) {
-                                        smsPermissionLauncher.launch(Manifest.permission.RECEIVE_SMS)
-                                    } else {
-                                        smsReceiverPermissionGranted = false
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "Automatic SMS Tracking",
+                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = if (isSmsActive) CreditGreen.copy(alpha = 0.2f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                                        ) {
+                                            Text(
+                                                text = if (isSmsActive) "ACTIVE" else "OFF",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    fontSize = 9.sp
+                                                ),
+                                                color = if (isSmsActive) CreditGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                            )
+                                        }
                                     }
-                                },
-                                colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary)
-                            )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = if (isSmsActive) "Actively capturing MoMo & bank alerts" else "Tap to turn on automatic alert detection",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (isSmsActive) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                Switch(
+                                    checked = isSmsActive,
+                                    onCheckedChange = handleToggleSms,
+                                    thumbContent = {
+                                        Icon(
+                                            imageVector = if (isSmsActive) Icons.Default.Check else Icons.Default.Close,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(SwitchDefaults.IconSize)
+                                        )
+                                    },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = PrimaryGreen,
+                                        checkedIconColor = PrimaryGreen,
+                                        uncheckedThumbColor = Color.White,
+                                        uncheckedTrackColor = MaterialTheme.colorScheme.outlineVariant,
+                                        uncheckedIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
+                            }
                         }
 
                         HorizontalDivider(
@@ -340,8 +447,8 @@ fun SettingsScreen(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(12.dp))
                                     .background(MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f)),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -349,7 +456,7 @@ fun SettingsScreen(
                                     imageVector = Icons.Default.Refresh,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.secondary,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
 
@@ -358,11 +465,13 @@ fun SettingsScreen(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = "Sync Device SMS Inbox",
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = "Scan past MoMo, Telecel & Bank SMS alerts",
-                                    style = MaterialTheme.typography.labelSmall,
+                                    style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -389,7 +498,7 @@ fun SettingsScreen(
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text("Syncing...", fontSize = 12.sp)
                                 } else {
-                                    Text("Sync Now", fontSize = 12.sp)
+                                    Text("Sync Now", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -400,156 +509,113 @@ fun SettingsScreen(
                         )
 
                         // 3. Biometric / PIN App Lock
-                        Row(
+                        val handleToggleBiometrics: (Boolean) -> Unit = { enabled ->
+                            isBiometricsEnabled = enabled
+                            securityPrefs.edit().putBoolean("biometrics_enabled", enabled).apply()
+                            coroutineScope.launch {
+                                snackbarHostState?.showSnackbar(
+                                    if (enabled) "Biometric Lock enabled."
+                                    else "Biometric Lock disabled."
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isBiometricsEnabled) PrimaryGreen.copy(alpha = 0.08f) else Color.Transparent,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Fingerprint,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(14.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Biometric App Lock",
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
-                                )
-                                Text(
-                                    text = "Protect expense ledger on launch",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-
-                            Switch(
-                                checked = isBiometricsEnabled,
-                                onCheckedChange = { enabled ->
-                                    isBiometricsEnabled = enabled
-                                    securityPrefs.edit().putBoolean("biometrics_enabled", enabled).apply()
-                                    coroutineScope.launch {
-                                        snackbarHostState?.showSnackbar(
-                                            if (enabled) "Biometric Lock enabled."
-                                            else "Biometric Lock disabled."
-                                        )
-                                    }
-                                },
-                                colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Section 3: Data, Cloud Sync & Portability
-            item {
-                Text(
-                    text = "DATA & PORTABILITY",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        letterSpacing = 1.2.sp,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-                ) {
-                    Column {
-                        SettingsRowItem(
-                            icon = Icons.Default.Download,
-                            title = "Export & Encrypted Vault",
-                            subtitle = "CSV, PDF, SQLite dump and AES-256 vault backup",
-                            onClick = onOpenExportBackup
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
-                        )
-                        SettingsRowItem(
-                            icon = Icons.Default.Security,
-                            title = "Privacy & Setup Guide",
-                            subtitle = "Review zero-knowledge architecture, currency setup, and active rails",
-                            onClick = onOpenOnboardingFunnel
-                        )
-                    }
-                }
-            }
-
-            // Section 4: Screen 21: Parser Rules Verification (Developer Only)
-            if (showDeveloperOtaSection) {
-                item {
-                    Text(
-                        text = "PARSER RULES ENGINE (DIAGNOSTICS)",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            letterSpacing = 1.2.sp,
-                            fontWeight = FontWeight.Bold
-                        ),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { handleToggleBiometrics(!isBiometricsEnabled) }
+                                    .padding(horizontal = 10.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text("Deterministic Parser Rules", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold))
-                                    Text("Rule DB v2.4 · 15 active MoMo & Bank format patterns", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                Button(
-                                    onClick = {
-                                        isCheckingUpdates = true
-                                        coroutineScope.launch {
-                                            kotlinx.coroutines.delay(350)
-                                            isCheckingUpdates = false
-                                            snackbarHostState?.showSnackbar("Parser rules active: MTN MoMo, Telecel, AT Money, GCB, Stanbic, and Ecobank verified.")
-                                        }
-                                    },
-                                    enabled = !isCheckingUpdates,
-                                    shape = RoundedCornerShape(10.dp)
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(
+                                            if (isBiometricsEnabled) PrimaryGreen.copy(alpha = 0.18f)
+                                            else MaterialTheme.colorScheme.surfaceVariant
+                                        ),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    if (isCheckingUpdates) {
-                                        CircularProgressIndicator(modifier = Modifier.size(14.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
-                                    } else {
-                                        Text("Verify Rules", fontSize = 12.sp)
-                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.Fingerprint,
+                                        contentDescription = null,
+                                        tint = if (isBiometricsEnabled) PrimaryGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(22.dp)
+                                    )
                                 }
+
+                                Spacer(modifier = Modifier.width(14.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "Biometric App Lock",
+                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = if (isBiometricsEnabled) CreditGreen.copy(alpha = 0.2f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                                        ) {
+                                            Text(
+                                                text = if (isBiometricsEnabled) "ACTIVE" else "OFF",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    fontSize = 9.sp
+                                                ),
+                                                color = if (isBiometricsEnabled) CreditGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = if (isBiometricsEnabled) "Ledger protected by biometric authentication" else "Require fingerprint scan on launch",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (isBiometricsEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                Switch(
+                                    checked = isBiometricsEnabled,
+                                    onCheckedChange = handleToggleBiometrics,
+                                    thumbContent = {
+                                        Icon(
+                                            imageVector = if (isBiometricsEnabled) Icons.Default.Check else Icons.Default.Close,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(SwitchDefaults.IconSize)
+                                        )
+                                    },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = PrimaryGreen,
+                                        checkedIconColor = PrimaryGreen,
+                                        uncheckedThumbColor = Color.White,
+                                        uncheckedTrackColor = MaterialTheme.colorScheme.outlineVariant,
+                                        uncheckedIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
                             }
                         }
                     }
                 }
             }
 
-            // Section 5: Data Management
+            // Section 3: Privacy & Legal
             item {
                 Text(
-                    text = "DATABASE ACTIONS",
+                    text = "PRIVACY & LEGAL",
                     style = MaterialTheme.typography.labelSmall.copy(
                         letterSpacing = 1.2.sp,
                         fontWeight = FontWeight.Bold
@@ -566,21 +632,10 @@ fun SettingsScreen(
                 ) {
                     Column {
                         SettingsRowItem(
-                            icon = Icons.Default.Refresh,
-                            title = "Reset Sample Data",
-                            subtitle = "Reload sample Ghanaian transactions, payment methods, and categories",
-                            onClick = { showResetConfirm = true }
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
-                        )
-                        SettingsRowItem(
-                            icon = Icons.Default.DeleteForever,
-                            iconTint = DebitRed,
-                            title = "Clear All Expenses",
-                            subtitle = "Permanently remove all recorded expenses",
-                            onClick = { showClearConfirm = true }
+                            icon = Icons.Default.Security,
+                            title = "Privacy Policy & Terms of Service",
+                            subtitle = "Zero-knowledge local storage, data protection, and usage terms",
+                            onClick = onOpenPrivacyTerms
                         )
                     }
                 }
@@ -590,48 +645,6 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(72.dp))
             }
         }
-    }
-
-    if (showResetConfirm) {
-        AlertDialog(
-            onDismissRequest = { showResetConfirm = false },
-            title = { Text("Restore Sample Data?") },
-            text = { Text("This will reset your categories, payment methods, and expenses to sample default entries.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    onResetDemoData()
-                    showResetConfirm = false
-                }) {
-                    Text("Restore Sample Data")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showResetConfirm = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-
-    if (showClearConfirm) {
-        AlertDialog(
-            onDismissRequest = { showClearConfirm = false },
-            title = { Text("Clear All Expenses?") },
-            text = { Text("Are you sure you want to delete all recorded expenses? This cannot be undone.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    onClearAllData()
-                    showClearConfirm = false
-                }) {
-                    Text("Clear All", color = DebitRed)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showClearConfirm = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
     }
 }
 

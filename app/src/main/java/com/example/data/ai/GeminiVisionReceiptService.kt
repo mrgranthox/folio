@@ -26,7 +26,7 @@ import kotlin.math.max
 
 class GeminiVisionReceiptService {
 
-    private val modelName = "gemini-2.5-flash"
+    private val modelName = "gemini-3.5-flash"
     private val baseUrl = "https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent"
 
     private val client = OkHttpClient.Builder()

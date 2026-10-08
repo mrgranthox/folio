@@ -16,15 +16,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CreditCard
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Search
@@ -42,10 +44,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -58,33 +60,64 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.theme.CreditGreen
-import com.example.ui.theme.DebitRed
+import com.example.data.model.AccountEntity
+import com.example.data.model.CategoryEntity
+import java.util.UUID
 
-/**
- * Module A: Onboarding & Trust Funnel (4 Screens) per Visual Specification:
- * 1. Welcome & Value Proposition (Carousel of illustrations, Headline Small, Body Medium, Primary filled button)
- * 2. Zero-Knowledge Privacy Agreement (Large shield icon, telemetry exclusion declaration, Checkbox required to enable button)
- * 3. Regional & Currency Setup (Searchable dropdown list Outlined TextField for fiat currencies)
- * 4. Initial Account Configuration (Toggle cards for Mobile Money, Bank, Cash, Card)
- */
+data class CategoryDraft(
+    val id: String = UUID.randomUUID().toString(),
+    var name: String,
+    var icon: String = "briefcase",
+    var colorHex: String = "#3B82F6"
+)
+
+data class AccountDraft(
+    val id: String = UUID.randomUUID().toString(),
+    var name: String,
+    var type: String, // "MOMO", "BANK", "CASH", "CARD"
+    var initialBalance: String = "0.0",
+    var isSelected: Boolean = true
+)
+
 @Composable
 fun OnboardingFunnelScreen(
-    onComplete: (selectedCurrency: String, selectedRails: List<String>) -> Unit,
+    onComplete: (
+        selectedCurrency: String,
+        selectedCategories: List<CategoryEntity>,
+        selectedAccounts: List<AccountEntity>
+    ) -> Unit,
     onDismiss: (() -> Unit)? = null
 ) {
     var step by remember { mutableIntStateOf(1) }
     var agreedToPrivacy by remember { mutableStateOf(false) }
     var selectedCurrency by remember { mutableStateOf("GHS") }
     var currencySearchQuery by remember { mutableStateOf("") }
-    val selectedRails = remember { mutableStateListOf("MOMO", "BANK", "CASH") }
 
-    val totalSteps = 4
+    // Initial 3 category drafts
+    val categoryDrafts = remember {
+        mutableStateListOf(
+            CategoryDraft(name = "Food & Dining", icon = "utensils", colorHex = "#F59E0B"),
+            CategoryDraft(name = "Transport & Fuel", icon = "car", colorHex = "#10B981"),
+            CategoryDraft(name = "Bills & Utilities", icon = "zap", colorHex = "#3B82F6")
+        )
+    }
+
+    // Initial account drafts
+    val accountDrafts = remember {
+        mutableStateListOf(
+            AccountDraft(name = "Mobile Money", type = "MOMO", initialBalance = "0.0", isSelected = true),
+            AccountDraft(name = "Bank Account", type = "BANK", initialBalance = "0.0", isSelected = true),
+            AccountDraft(name = "Cash Wallet", type = "CASH", initialBalance = "0.0", isSelected = true),
+            AccountDraft(name = "Debit / Credit Card", type = "CARD", initialBalance = "0.0", isSelected = false)
+        )
+    }
+
+    val totalSteps = 5
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -136,7 +169,7 @@ fun OnboardingFunnelScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(24.dp)
+                .padding(horizontal = 24.dp, vertical = 12.dp)
         ) {
             when (step) {
                 1 -> WelcomeValuePropScreen(onNext = { step = 2 })
@@ -152,17 +185,37 @@ fun OnboardingFunnelScreen(
                     onSelectCurrency = { selectedCurrency = it },
                     onNext = { step = 4 }
                 )
-                4 -> InitialAccountConfigScreen(
-                    selectedRails = selectedRails,
-                    onToggleRail = { rail ->
-                        if (selectedRails.contains(rail)) {
-                            if (selectedRails.size > 1) selectedRails.remove(rail)
-                        } else {
-                            selectedRails.add(rail)
-                        }
-                    },
+                4 -> InitialCategoryConfigScreen(
+                    categoryDrafts = categoryDrafts,
+                    onNext = { step = 5 }
+                )
+                5 -> InitialAccountConfigScreen(
+                    accountDrafts = accountDrafts,
+                    selectedCurrency = selectedCurrency,
                     onFinish = {
-                        onComplete(selectedCurrency, selectedRails.toList())
+                        val finalCategories = categoryDrafts
+                            .filter { it.name.isNotBlank() }
+                            .map { draft ->
+                                CategoryEntity(
+                                    id = draft.id,
+                                    name = draft.name.trim(),
+                                    icon = draft.icon,
+                                    colorHex = draft.colorHex
+                                )
+                            }
+                        val finalAccounts = accountDrafts
+                            .filter { it.isSelected && it.name.isNotBlank() }
+                            .map { draft ->
+                                val bal = draft.initialBalance.toDoubleOrNull() ?: 0.0
+                                AccountEntity(
+                                    id = draft.id,
+                                    name = draft.name.trim(),
+                                    accountType = draft.type,
+                                    currentBalance = bal,
+                                    currency = selectedCurrency
+                                )
+                            }
+                        onComplete(selectedCurrency, finalCategories, finalAccounts)
                     }
                 )
             }
@@ -233,7 +286,7 @@ private fun WelcomeValuePropScreen(onNext: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                textAlign = TextAlign.Center
             )
 
             Spacer(modifier = Modifier.height(28.dp))
@@ -301,7 +354,7 @@ private fun ZeroKnowledgePrivacyScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.Security,
+                    imageVector = Icons.Default.Shield,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(36.dp)
@@ -316,52 +369,86 @@ private fun ZeroKnowledgePrivacyScreen(
                 color = MaterialTheme.colorScheme.onSurface
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Folio operates with total data autonomy. Review our privacy principles below:",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
 
             Card(
-                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer
-                )
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
             ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = "LEGAL DECLARATION & EXCLUSION OF TELEMETRY",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "1. Local-First Sovereignty: All transaction ledgers, accounts, and SMS alerts reside exclusively in your local sandboxed SQLite database on this device.\n\n" +
-                                "2. Zero Hidden Telemetry: Folio contains no ad-trackers, background analytics daemons, or behavioral profiling services.\n\n" +
-                                "3. Opt-In Intelligence: Automated MoMo/bank parsing executes 100% offline. Cloud AI (Gemini Assistant & OCR) operates solely when you explicitly supply an API key and trigger those actions.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 20.sp
-                    )
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.Top) {
+                        Icon(
+                            Icons.Default.Security,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Local Database Engine",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = "Transactions, balances, and notes reside solely in encrypted Room SQLite storage.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Row(verticalAlignment = Alignment.Top) {
+                        Icon(
+                            Icons.Default.SyncLock,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Zero Cloud Tracking",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = "No third-party analytics, remote tracking servers, or telemetry SDKs are attached.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
             Row(
-                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { onAgreedChange(!agreed) }
-                    .padding(vertical = 4.dp)
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Checkbox(
                     checked = agreed,
                     onCheckedChange = onAgreedChange,
-                    colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary),
-                    modifier = Modifier.testTag("privacy_agreement_checkbox")
+                    colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "I have read and agree to the zero-knowledge privacy terms.",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                    text = "I accept the zero-knowledge privacy policy and local storage design.",
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
@@ -373,13 +460,11 @@ private fun ZeroKnowledgePrivacyScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp)
-                .testTag("privacy_agree_button"),
+                .testTag("agree_privacy_button"),
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                contentColor = MaterialTheme.colorScheme.onPrimary
             )
         ) {
             Text(
@@ -390,7 +475,7 @@ private fun ZeroKnowledgePrivacyScreen(
     }
 }
 
-// 3. Regional & Currency Setup Screen
+// 3. Regional & Currency Setup
 @Composable
 private fun RegionalCurrencyScreen(
     selectedCurrency: String,
@@ -400,7 +485,7 @@ private fun RegionalCurrencyScreen(
     onNext: () -> Unit
 ) {
     val currencies = listOf(
-        Pair("GHS", "Ghana Cedi (GH₵)"),
+        Pair("GHS", "Ghanaian Cedi (GH¢)"),
         Pair("USD", "US Dollar ($)"),
         Pair("EUR", "Euro (€)"),
         Pair("GBP", "British Pound (£)"),
@@ -409,17 +494,21 @@ private fun RegionalCurrencyScreen(
         Pair("ZAR", "South African Rand (R)")
     )
 
-    val filtered = currencies.filter {
-        it.first.contains(searchQuery, ignoreCase = true) || it.second.contains(searchQuery, ignoreCase = true)
+    val filtered = remember(searchQuery) {
+        if (searchQuery.isBlank()) currencies
+        else currencies.filter {
+            it.first.contains(searchQuery, ignoreCase = true) ||
+                    it.second.contains(searchQuery, ignoreCase = true)
+        }
     }
 
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "Regional & Currency Setup",
+                text = "Primary Currency",
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -427,7 +516,7 @@ private fun RegionalCurrencyScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Select your primary accounting fiat currency.",
+                text = "Select the main currency for your ledger calculations and wallet balances.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -437,26 +526,20 @@ private fun RegionalCurrencyScreen(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = onSearchChange,
-                modifier = Modifier.fillMaxWidth(),
                 placeholder = { Text("Search currency...") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                ),
-                singleLine = true
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f, fill = false),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.weight(1f)
             ) {
-                items(filtered) { (code, label) ->
+                itemsIndexed(filtered) { _, (code, label) ->
                     val isSelected = selectedCurrency == code
                     Card(
                         modifier = Modifier
@@ -466,29 +549,31 @@ private fun RegionalCurrencyScreen(
                         colors = CardDefaults.cardColors(
                             containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
                             else MaterialTheme.colorScheme.surfaceContainer
-                        ),
-                        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null
+                        )
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 14.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                ),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                            Column {
+                                Text(
+                                    text = code,
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                )
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                             if (isSelected) {
                                 Icon(
-                                    imageVector = Icons.Default.Check,
+                                    Icons.Default.Check,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
@@ -519,27 +604,160 @@ private fun RegionalCurrencyScreen(
     }
 }
 
-// 4. Initial Account Configuration Screen
+// 4. Initial Category Setup Screen
 @Composable
-private fun InitialAccountConfigScreen(
-    selectedRails: List<String>,
-    onToggleRail: (String) -> Unit,
-    onFinish: () -> Unit
+private fun InitialCategoryConfigScreen(
+    categoryDrafts: MutableList<CategoryDraft>,
+    onNext: () -> Unit
 ) {
-    val rails = listOf(
-        Triple("MOMO", "Mobile Money", Icons.Default.PhoneAndroid),
-        Triple("BANK", "Bank Account", Icons.Default.AccountBalance),
-        Triple("CASH", "Cash Wallet", Icons.Default.Payments),
-        Triple("CARD", "Debit / Credit Card", Icons.Default.CreditCard)
-    )
-
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Category,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Categories Setup",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
             Text(
-                text = "Initial Account Setup",
+                text = "Set up 2 or 3 initial categories to group your payments. You can edit names or add custom ones.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                itemsIndexed(categoryDrafts) { index, draft ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primaryContainer),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "${index + 1}",
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            OutlinedTextField(
+                                value = draft.name,
+                                onValueChange = { newName ->
+                                    categoryDrafts[index] = draft.copy(name = newName)
+                                },
+                                label = { Text("Category Name") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp)
+                            )
+
+                            if (categoryDrafts.size > 1) {
+                                IconButton(
+                                    onClick = { categoryDrafts.removeAt(index) },
+                                    modifier = Modifier.padding(start = 4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Remove Category",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    OutlinedButton(
+                        onClick = {
+                            categoryDrafts.add(
+                                CategoryDraft(
+                                    name = "Category ${categoryDrafts.size + 1}",
+                                    icon = "briefcase",
+                                    colorHex = "#3B82F6"
+                                )
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Add Another Category")
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = onNext,
+            enabled = categoryDrafts.any { it.name.isNotBlank() },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .testTag("categories_continue_button"),
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            )
+        ) {
+            Text(
+                text = "Continue to Accounts",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+            )
+        }
+    }
+}
+
+// 5. Initial Accounts Setup Screen
+@Composable
+private fun InitialAccountConfigScreen(
+    accountDrafts: MutableList<AccountDraft>,
+    selectedCurrency: String,
+    onFinish: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Initial Accounts Setup",
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -547,62 +765,90 @@ private fun InitialAccountConfigScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Toggle the payment rails you actively use. Selected cards will be provisioned in your ledger.",
+                text = "Select active payment methods, edit wallet names, and enter your starting balance.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                rails.forEach { (key, title, icon) ->
-                    val isSelected = selectedRails.contains(key)
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                itemsIndexed(accountDrafts) { index, draft ->
+                    val icon = when (draft.type) {
+                        "MOMO" -> Icons.Default.PhoneAndroid
+                        "BANK" -> Icons.Default.AccountBalance
+                        "CASH" -> Icons.Default.Payments
+                        else -> Icons.Default.CreditCard
+                    }
+
                     Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onToggleRail(key) }
-                            .testTag("toggle_rail_$key"),
+                        modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                            containerColor = if (draft.isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
                             else MaterialTheme.colorScheme.surfaceContainer
                         ),
-                        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null
+                        border = if (draft.isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = null,
-                                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(28.dp)
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text(
-                                text = title,
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                                ),
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.weight(1f)
-                            )
-                            if (isSelected) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.primary),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        Icons.Default.Check,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimary,
-                                        modifier = Modifier.size(16.dp)
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        accountDrafts[index] = draft.copy(isSelected = !draft.isSelected)
+                                    }
+                            ) {
+                                Checkbox(
+                                    checked = draft.isSelected,
+                                    onCheckedChange = { checked ->
+                                        accountDrafts[index] = draft.copy(isSelected = checked)
+                                    }
+                                )
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    tint = if (draft.isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = draft.name,
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = if (draft.isSelected) FontWeight.Bold else FontWeight.Medium
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            AnimatedVisibility(visible = draft.isSelected) {
+                                Column(modifier = Modifier.padding(top = 10.dp)) {
+                                    OutlinedTextField(
+                                        value = draft.name,
+                                        onValueChange = { newName ->
+                                            accountDrafts[index] = draft.copy(name = newName)
+                                        },
+                                        label = { Text("Account Name") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    OutlinedTextField(
+                                        value = draft.initialBalance,
+                                        onValueChange = { newBal ->
+                                            accountDrafts[index] = draft.copy(initialBalance = newBal)
+                                        },
+                                        label = { Text("Starting Balance ($selectedCurrency)") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(10.dp)
                                     )
                                 }
                             }
@@ -612,8 +858,11 @@ private fun InitialAccountConfigScreen(
             }
         }
 
+        Spacer(modifier = Modifier.height(16.dp))
+
         Button(
             onClick = onFinish,
+            enabled = accountDrafts.any { it.isSelected && it.name.isNotBlank() },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp)
@@ -625,7 +874,7 @@ private fun InitialAccountConfigScreen(
             )
         ) {
             Text(
-                text = "Get Started",
+                text = "Complete Setup & Get Started",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
             )
         }

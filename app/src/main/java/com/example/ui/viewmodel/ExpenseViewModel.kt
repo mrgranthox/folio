@@ -429,8 +429,13 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
                     _snackbarEvent.emit("Auto-merged with existing record (${tx.counterparty})")
                 }
                 ReconciliationOutcome.QUEUED_FOR_REVIEW -> {
-                    repository.addTransaction(tx)
-                    _snackbarEvent.emit("Transaction recorded.")
+                    if (eval.candidateForQueue != null) {
+                        repository.addDuplicate(eval.candidateForQueue)
+                        _snackbarEvent.emit("Duplicate ID detected (${tx.externalRef ?: "Ref"}). Moved to Review Queue.")
+                    } else {
+                        repository.addTransaction(tx)
+                        _snackbarEvent.emit("Transaction recorded.")
+                    }
                 }
                 ReconciliationOutcome.INSERTED_NEW -> {
                     repository.addTransaction(tx)
@@ -467,6 +472,24 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     }
 
     // --- Accounts & Categories Operations ---
+    fun completeOnboardingSetup(
+        currency: String,
+        categories: List<CategoryEntity>,
+        accounts: List<AccountEntity>
+    ) {
+        viewModelScope.launch {
+            categories.forEach { cat ->
+                repository.addCategory(cat)
+            }
+            accounts.forEach { acc ->
+                repository.addAccount(acc.copy(currency = currency))
+            }
+            if (accounts.isNotEmpty() || categories.isNotEmpty()) {
+                _snackbarEvent.emit("Setup complete! Your ${accounts.size} account(s) and ${categories.size} category(ies) are active.")
+            }
+        }
+    }
+
     fun addAccount(name: String, type: String, balance: Double, currency: String) {
         viewModelScope.launch {
             val newAcc = AccountEntity(
@@ -586,6 +609,39 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             repository.dismissDuplicate(candidateId)
             _snackbarEvent.emit("Duplicate candidate dismissed.")
+        }
+    }
+
+    fun mergeAllDuplicates() {
+        viewModelScope.launch {
+            val list = uiState.value.duplicateCandidates
+            if (list.isEmpty()) return@launch
+            for (item in list) {
+                repository.mergeDuplicate(item)
+            }
+            _snackbarEvent.emit("Merged and reconciled ${list.size} duplicate candidates!")
+        }
+    }
+
+    fun dismissAllDuplicates() {
+        viewModelScope.launch {
+            val list = uiState.value.duplicateCandidates
+            if (list.isEmpty()) return@launch
+            for (item in list) {
+                repository.dismissDuplicate(item.id)
+            }
+            _snackbarEvent.emit("Dismissed ${list.size} duplicate candidates.")
+        }
+    }
+
+    fun dismissAllUnrecognized() {
+        viewModelScope.launch {
+            val list = uiState.value.unrecognizedMessages
+            if (list.isEmpty()) return@launch
+            for (item in list) {
+                repository.dismissUnrecognized(item.id)
+            }
+            _snackbarEvent.emit("Dismissed ${list.size} pending SMS alerts.")
         }
     }
 

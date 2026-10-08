@@ -25,11 +25,15 @@ import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.Payment
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Receipt
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
@@ -189,6 +193,79 @@ fun TransactionDetailSheet(
                 }
             }
 
+            // Transaction Overview Narrative Card
+            Spacer(modifier = Modifier.height(14.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "TRANSACTION OVERVIEW",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                letterSpacing = 1.1.sp,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val summaryNarrative = if (isIncome) {
+                        "Payment of ${CurrencyUtils.format(abs(transaction.amount), transaction.currency)} was received from ${transaction.counterparty}${if (!transaction.accountRail.isNullOrBlank()) " via ${transaction.accountRail}" else ""}."
+                    } else {
+                        "Payment of ${CurrencyUtils.format(abs(transaction.amount), transaction.currency)} was made to ${transaction.counterparty}${if (!transaction.accountRail.isNullOrBlank()) " via ${transaction.accountRail}" else ""}."
+                    }
+
+                    Text(
+                        text = summaryNarrative,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    if (!transaction.notes.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Description,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = transaction.notes,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
             // Optional Receipt Photo Card
             if (!transaction.receiptImagePath.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(14.dp))
@@ -275,6 +352,18 @@ fun TransactionDetailSheet(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
+                    DetailRow(
+                        icon = Icons.Default.Person,
+                        label = if (isIncome) "Sender / Payer" else "Recipient / Payee",
+                        value = transaction.counterparty
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    DetailRow(
+                        icon = Icons.Default.SwapHoriz,
+                        label = "Transaction Flow",
+                        value = if (isIncome) "Inflow (Deposit / Payment Received)" else "Outflow (Cash Out / Payment Made)"
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                     val activeCatName = categories.firstOrNull { it.id == currentCategoryId }?.name ?: transaction.categoryName ?: transaction.categoryId
                     DetailRow(
                         icon = Icons.Default.Category,
@@ -298,6 +387,12 @@ fun TransactionDetailSheet(
                         icon = Icons.Default.DocumentScanner,
                         label = "Entry Method",
                         value = transaction.sourceMethod.uppercase()
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    DetailRow(
+                        icon = Icons.Default.Verified,
+                        label = "Audit Status",
+                        value = if (transaction.isVerified) "Verified Ledger Entry" else "Draft / Pending Audit"
                     )
                     if (!transaction.externalRef.isNullOrBlank()) {
                         HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))

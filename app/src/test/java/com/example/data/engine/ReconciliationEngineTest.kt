@@ -47,7 +47,7 @@ class ReconciliationEngineTest {
         )
 
         val result = reconciler.evaluate(incoming, existing)
-        assertEquals(ReconciliationOutcome.IDEMPOTENT_SKIP, result.outcome)
+        assertEquals(ReconciliationOutcome.QUEUED_FOR_REVIEW, result.outcome)
         assertEquals(100, result.matchScore)
     }
 

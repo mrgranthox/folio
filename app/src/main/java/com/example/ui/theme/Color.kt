@@ -10,13 +10,18 @@ val M3PrimaryDark = Color(0xFF818CF8)
 val M3OnPrimaryLight = Color(0xFFFFFFFF)
 val M3OnPrimaryDark = Color(0xFF111827)
 
-val M3SurfaceLight = Color(0xFFF4F5F7)
+val M3BackgroundLight = Color(0xFFF0F2F6) // Soft modern light gray canvas
+val M3SurfaceLight = Color(0xFFF6F8FA)    // Clean tinted surface
 val M3SurfaceDark = Color(0xFF101216)
 
-val M3SurfaceContainerLight = Color(0xFFFFFFFF)
+val M3SurfaceContainerLight = Color(0xFFE2E5EB) // Pronounced gray for cards and KPIs
 val M3SurfaceContainerDark = Color(0xFF1C1F26)
 
-val M3SurfaceContainerHighLight = Color(0xFFEAECEF)
+// Dedicated Dock Tab bar colors: subtle off-white/gray in light mode and off-white tinted dark in dark mode
+val M3TabDockContainerLight = Color(0xFFECEFF4) // Distinct soft off-white/light-gray separate from cards & sheets
+val M3TabDockContainerDark = Color(0xFF222630)  // Distinct slightly elevated off-dark-gray separate from cards & sheets
+
+val M3SurfaceContainerHighLight = Color(0xFFD6DAE2) // Darker gray for elevated/variant containers
 val M3SurfaceContainerHighDark = Color(0xFF262A34)
 
 val M3OnSurfaceLight = Color(0xFF111827)

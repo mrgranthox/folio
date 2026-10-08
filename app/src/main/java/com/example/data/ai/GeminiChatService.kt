@@ -13,8 +13,8 @@ import java.util.concurrent.TimeUnit
 
 class GeminiChatService {
 
-    // Using gemini-2.5-flash for general & support tasks with high free tier limits
-    private val modelName = "gemini-2.5-flash"
+    // Using gemini-3.5-flash for general & support tasks
+    private val modelName = "gemini-3.5-flash"
     private val baseUrl = "https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent"
 
     private val client = OkHttpClient.Builder()
@@ -40,7 +40,7 @@ class GeminiChatService {
 
         if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
             return@withContext "**Live Gemini AI requires an API Key**\n\n" +
-                    "Folio connects directly to Google's `gemini-2.5-flash` model. However, an API key is required to make live calls.\n\n" +
+                    "Folio connects directly to Google's `gemini-3.5-flash` model. However, an API key is required to make live calls.\n\n" +
                     "Tap the API Key action in the top right of this chat or the banner below to configure your Gemini API Key.\n\n" +
                     "**Your Current Accounts Snapshot:**\n$fallbackDataSummary"
         }
@@ -91,6 +91,19 @@ class GeminiChatService {
                 } catch (_: Exception) {
                     "HTTP ${response.code}"
                 }
+
+                val isRateLimit = response.code == 429 ||
+                        errorMsg.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
+                        errorMsg.contains("quota", ignoreCase = true) ||
+                        errorMsg.contains("rate limit", ignoreCase = true) ||
+                        errorMsg.contains("429", ignoreCase = true)
+
+                if (isRateLimit) {
+                    return@withContext "**[RATE_LIMIT_BREACH] Gemini Model Rate Limit Reached (HTTP 429)**\n\n" +
+                            "The request limit or quota for the Gemini API key has been reached. Folio automatically switched to local intelligence so your query still gets answered with your live ledger numbers below.\n\n" +
+                            "**Your Local Financial Engine Summary:**\n\n$fallbackDataSummary"
+                }
+
                 return@withContext "**Gemini Service Notice** ($errorMsg)\n\n" +
                         "Here is what your local data shows:\n\n$fallbackDataSummary"
             }

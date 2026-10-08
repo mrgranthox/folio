@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import android.content.Context
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -17,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
@@ -26,8 +29,10 @@ import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -36,6 +41,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -45,7 +51,10 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import com.example.ui.theme.WarningOrange
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -92,6 +101,8 @@ fun MainAppShell(
 
     val snackbarHostState = remember { SnackbarHostState() }
 
+    val securityPrefs = remember { context.getSharedPreferences("folio_security_prefs", Context.MODE_PRIVATE) }
+
     // Sheet states
     var showAddExpenseSheet by remember { mutableStateOf(false) }
     var selectedTransactionForDetail by remember { mutableStateOf<TransactionEntity?>(null) }
@@ -99,8 +110,8 @@ fun MainAppShell(
     var showQuickPasteSmsSheet by remember { mutableStateOf(false) }
     var showAccountsDialog by remember { mutableStateOf(false) }
     var showCategoriesDialog by remember { mutableStateOf(false) }
-    var showExportBackupDialog by remember { mutableStateOf(false) }
-    var showOnboardingFunnel by remember { mutableStateOf(false) }
+    var showPrivacyTermsDialog by remember { mutableStateOf(false) }
+    var showOnboardingFunnel by remember { mutableStateOf(!securityPrefs.getBoolean("setup_guide_completed", false)) }
     var showAiChatSheet by remember { mutableStateOf(false) }
 
     val addExpenseSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -126,32 +137,21 @@ fun MainAppShell(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        text = when (selectedTab) {
-                            0 -> "Folio Expenses"
-                            1 -> "Expense Ledger"
-                            2 -> "Spending Analytics"
-                            3 -> "Review"
-                            4 -> "Settings"
-                            else -> "Folio"
-                        },
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                    )
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+        snackbarHost = {
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(bottom = 76.dp)
             )
-        }
+        },
+        containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = innerPadding.calculateTopPadding())
+                .background(MaterialTheme.colorScheme.background)
+                .statusBarsPadding()
         ) {
             when (selectedTab) {
                 0 -> OverviewScreen(
@@ -171,7 +171,8 @@ fun MainAppShell(
                     onAccountFilterChange = { viewModel.setAccountFilter(it) },
                     onDirectionFilterChange = { viewModel.setDirectionFilter(it) },
                     onSortChange = { viewModel.setSortOrder(it) },
-                    onTransactionClick = { tx -> selectedTransactionForDetail = tx }
+                    onTransactionClick = { tx -> selectedTransactionForDetail = tx },
+                    onAddExpenseClick = { showAddExpenseSheet = true }
                 )
                 2 -> AnalyticsScreen(
                     state = state,
@@ -182,6 +183,8 @@ fun MainAppShell(
                     onMergeDuplicate = { viewModel.mergeDuplicate(it) },
                     onKeepBothDuplicate = { viewModel.keepBothDuplicate(it) },
                     onDismissDuplicate = { viewModel.dismissDuplicate(it) },
+                    onMergeAllDuplicates = { viewModel.mergeAllDuplicates() },
+                    onDismissAllDuplicates = { viewModel.dismissAllDuplicates() },
                     onConvertUnrecognized = { msg ->
                         val amt = msg.suspectedAmount?.toDoubleOrNull() ?: 0.0
                         val momoAcc = state.accounts.firstOrNull { it.accountType.equals("MOMO", ignoreCase = true) }?.id ?: state.accounts.firstOrNull()?.id ?: "acc-momo"
@@ -207,16 +210,19 @@ fun MainAppShell(
                             categoryId = catId
                         )
                     },
-                    onDismissUnrecognized = { viewModel.dismissUnrecognized(it) }
+                    onDismissUnrecognized = { viewModel.dismissUnrecognized(it) },
+                    onDismissAllUnrecognized = { viewModel.dismissAllUnrecognized() },
+                    onQuickPasteSmsClick = { showQuickPasteSmsSheet = true },
+                    onTransactionClick = { tx -> selectedTransactionForDetail = tx },
+                    onVerifyTransaction = { tx -> viewModel.updateTransaction(tx.copy(isVerified = true)) }
                 )
                 4 -> SettingsScreen(
                     state = state,
                     onOpenAccounts = { showAccountsDialog = true },
                     onOpenCategories = { showCategoriesDialog = true },
-                    onOpenExportBackup = { showExportBackupDialog = true },
                     onResetDemoData = { viewModel.resetDemoData() },
                     onClearAllData = { viewModel.clearAllData() },
-                    onOpenOnboardingFunnel = { showOnboardingFunnel = true },
+                    onOpenPrivacyTerms = { showPrivacyTermsDialog = true },
                     isSyncingInboxSms = viewModel.isSyncingInboxSms.value,
                     onSyncInboxSms = { viewModel.syncInboxSms(context) },
                     snackbarHostState = snackbarHostState
@@ -278,12 +284,18 @@ fun MainAppShell(
                     .padding(start = 16.dp, end = 16.dp, bottom = 3.dp),
                 contentAlignment = Alignment.Center
             ) {
+                val parentTabsCornerRadius = 24.dp
+                val parentTabsShape = RoundedCornerShape(parentTabsCornerRadius)
+
+                val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+                val tabDockBgColor = if (isDark) com.example.ui.theme.M3TabDockContainerDark else com.example.ui.theme.M3TabDockContainerLight
+
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
                         .widthIn(max = 520.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    shape = parentTabsShape,
+                    color = tabDockBgColor,
                     tonalElevation = 0.dp,
                     shadowElevation = 0.dp
                 ) {
@@ -291,7 +303,7 @@ fun MainAppShell(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(64.dp)
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                            .padding(horizontal = 4.dp, vertical = 4.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -310,7 +322,7 @@ fun MainAppShell(
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxHeight()
-                                    .clip(CircleShape)
+                                    .clip(parentTabsShape)
                                     .background(animatedBgColor)
                                     .clickable { selectedTab = index }
                                     .testTag("tab_${tab.name.lowercase(Locale.ROOT)}"),
@@ -319,7 +331,9 @@ fun MainAppShell(
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.Center,
-                                    modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp)
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 2.dp, vertical = 4.dp)
                                 ) {
                                     if (tab == AppTab.REVIEW && reviewBadgeCount > 0) {
                                         BadgedBox(badge = {
@@ -481,28 +495,23 @@ fun MainAppShell(
         )
     }
 
-    if (showExportBackupDialog) {
-        ExportBackupDialog(
-            sheetState = exportBackupSheetState,
-            onDismiss = { showExportBackupDialog = false },
-            onExportCsv = { callback ->
-                viewModel.exportCsv(callback)
-            },
-            onExportEncrypted = { pass, callback ->
-                viewModel.exportEncryptedBackup(pass, callback)
-            },
-            onImportEncrypted = { payload, pass, callback ->
-                viewModel.importEncryptedBackup(payload, pass, callback)
-            }
+    if (showPrivacyTermsDialog) {
+        PrivacyTermsDialog(
+            onDismiss = { showPrivacyTermsDialog = false }
         )
     }
 
     if (showOnboardingFunnel) {
         OnboardingFunnelScreen(
-            onComplete = { selectedCurrency, selectedRails ->
+            onComplete = { selectedCurrency, categories, accounts ->
+                viewModel.completeOnboardingSetup(selectedCurrency, categories, accounts)
+                securityPrefs.edit().putBoolean("setup_guide_completed", true).apply()
                 showOnboardingFunnel = false
             },
-            onDismiss = { showOnboardingFunnel = false }
+            onDismiss = {
+                securityPrefs.edit().putBoolean("setup_guide_completed", true).apply()
+                showOnboardingFunnel = false
+            }
         )
     }
 

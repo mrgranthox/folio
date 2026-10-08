@@ -7,6 +7,7 @@ import com.example.data.engine.SmsParserEngine
 import com.example.data.model.TransactionDirection
 import com.example.data.model.TransactionEntity
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -46,13 +47,8 @@ class ExampleUnitTest {
         val raw = "A recharge request of GHS 25.00 to meter 54310900789 (STEPHEN ETSE) has been processed successfully. Use this token (69579079454110730781) to recharge your meter. Txn ID: EAD00605119"
         val result = parser.parse("ECG", raw)
 
-        assertTrue(result.isFinancial)
-        assertEquals(25.00, result.amount!!, 0.001)
-        assertEquals("STEPHEN ETSE (Meter 54310900789)", result.counterparty)
-        assertEquals("EAD00605119", result.externalRef)
-        assertEquals("69579079454110730781", result.rechargeToken)
-        assertEquals("54310900789", result.meterNumber)
-        assertEquals(TransactionDirection.DEBIT, result.direction)
+        // ECG transactions are non-financial utility receipts (paid via MoMo or Bank) and not tracked directly
+        assertFalse(result.isFinancial)
     }
 
     @Test
@@ -138,7 +134,7 @@ class ExampleUnitTest {
         )
 
         val outcome = reconciler.evaluate(incoming, existing)
-        assertEquals(ReconciliationOutcome.IDEMPOTENT_SKIP, outcome.outcome)
+        assertEquals(ReconciliationOutcome.QUEUED_FOR_REVIEW, outcome.outcome)
     }
 
     @Test

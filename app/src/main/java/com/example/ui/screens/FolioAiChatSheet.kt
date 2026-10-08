@@ -201,7 +201,7 @@ fun FolioAiChatSheet(
                                 color = MaterialTheme.colorScheme.surfaceContainerHigh
                             ) {
                                 Text(
-                                    text = "gemini-2.5-flash",
+                                    text = "gemini-3.5-flash",
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
                                     color = MaterialTheme.colorScheme.primary
@@ -331,7 +331,10 @@ fun FolioAiChatSheet(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(messages, key = { it.id }) { msg ->
-                    ChatBubble(message = msg)
+                    ChatBubble(
+                        message = msg,
+                        onOpenApiKeyDialog = { showApiKeyDialog = true }
+                    )
                 }
 
                 if (isThinking) {
@@ -454,8 +457,17 @@ fun FolioAiChatSheet(
 }
 
 @Composable
-private fun ChatBubble(message: ChatMessage) {
+private fun ChatBubble(
+    message: ChatMessage,
+    onOpenApiKeyDialog: () -> Unit = {}
+) {
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val isRateLimit = !message.isUser && (
+            message.text.contains("[RATE_LIMIT_BREACH]") ||
+                    message.text.contains("Rate Limit Reached", ignoreCase = true) ||
+                    message.text.contains("HTTP 429", ignoreCase = true) ||
+                    message.text.contains("RESOURCE_EXHAUSTED", ignoreCase = true)
+            )
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -466,13 +478,13 @@ private fun ChatBubble(message: ChatMessage) {
                 modifier = Modifier
                     .size(28.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
+                    .background(if (isRateLimit) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.SmartToy,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = if (isRateLimit) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -487,13 +499,69 @@ private fun ChatBubble(message: ChatMessage) {
                 bottomEnd = if (message.isUser) 4.dp else 16.dp
             ),
             color = if (message.isUser) MaterialTheme.colorScheme.primary
+            else if (isRateLimit) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
             else MaterialTheme.colorScheme.surfaceContainer,
-            border = null,
+            border = if (isRateLimit) BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)) else null,
             modifier = Modifier.widthIn(max = if (message.isUser) 300.dp else 340.dp)
         ) {
             Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                if (isRateLimit) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Key,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        text = "AI Model Rate Limit Breached",
+                                        style = MaterialTheme.typography.titleSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp
+                                        ),
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                    Text(
+                                        text = "Google Gemini quota reached (HTTP 429)",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp),
+                                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f)
+                                    )
+                                }
+                            }
+                            TextButton(
+                                onClick = onOpenApiKeyDialog,
+                                modifier = Modifier.padding(start = 4.dp)
+                            ) {
+                                Text(
+                                    text = "Update Key",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+
                 FormattedMarkdownText(
-                    text = message.text,
+                    text = message.text.replace("[RATE_LIMIT_BREACH] ", ""),
                     isUser = message.isUser
                 )
                 Spacer(modifier = Modifier.height(4.dp))
