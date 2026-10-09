@@ -97,7 +97,7 @@ data class ParsedSmsResult(
             counterparty = counterparty,
             sourceMethod = "sms",
             notes = noteParts.joinToString(" • "),
-            isVerified = true,
+            isVerified = false,
             isDeleted = false,
             createdAt = System.currentTimeMillis(),
             categoryName = categoryName,
@@ -154,7 +154,7 @@ class SmsParserEngine {
         )
     }
 
-    fun isAuthorizedFinancialSender(sender: String, body: String): Boolean {
+    fun isAuthorizedFinancialSender(sender: String, body: String, allowBodyInference: Boolean = true): Boolean {
         val s = sender.lowercase(Locale.ROOT).trim()
         val b = body.lowercase(Locale.ROOT)
 
@@ -197,7 +197,7 @@ class SmsParserEngine {
         val hasExplicitBankHeader = (b.contains("acct:") || b.contains("acct **") || b.contains("acct no") || b.contains("debit alert") || b.contains("credit alert") || b.contains("amount debited") || b.contains("amount credited")) &&
                 (b.contains("avail bal") || b.contains("bal:") || b.contains("balance:") || b.contains("pos purchase") || b.contains("atm wdl") || b.contains("ref:"))
 
-        return hasExplicitMoMoHeader || hasExplicitBankHeader
+        return allowBodyInference && (hasExplicitMoMoHeader || hasExplicitBankHeader)
     }
 
     fun isPromotionalOrManagementMessage(body: String, sender: String): Boolean {
@@ -255,7 +255,12 @@ class SmsParserEngine {
         return hasDefiniteExecutionVerb
     }
 
-    fun parse(sender: String, body: String): ParsedSmsResult {
+    fun parse(
+        sender: String,
+        body: String,
+        sourceTimestamp: Long? = null,
+        allowBodySenderInference: Boolean = true
+    ): ParsedSmsResult {
         val cleanBody = body.trim()
         val lowerBody = cleanBody.lowercase(Locale.ROOT)
         val lowerSender = sender.lowercase(Locale.ROOT)
@@ -729,7 +734,7 @@ class SmsParserEngine {
         // -------------------------------------------------------------
         // 11. Robust Financial Verification Gate
         // -------------------------------------------------------------
-        val isAuthorized = isAuthorizedFinancialSender(sender, cleanBody)
+        val isAuthorized = isAuthorizedFinancialSender(sender, cleanBody, allowBodySenderInference)
         val isPromo = isPromotionalOrManagementMessage(cleanBody, sender)
         val hasProof = hasVerifiableTransactionProof(
             cleanBody = cleanBody,
@@ -771,7 +776,7 @@ class SmsParserEngine {
             meterNumber = null,
             rechargeToken = null,
             endingBalance = endingBalance,
-            timestamp = timestamp,
+            timestamp = sourceTimestamp ?: timestamp,
             rawBody = cleanBody,
             provider = provider,
             suggestedCategory = suggestedCategory,

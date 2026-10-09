@@ -452,7 +452,7 @@ fun OcrScannerSheet(
                             Spacer(modifier = Modifier.width(8.dp))
                             Column {
                                 Text(
-                                    text = if (isAiVerified) "Gemini Vision Verified ($confidenceScore%)" else "On-Device OCR ($confidenceScore%)",
+                                    text = if (isAiVerified) "Gemini Vision Extracted ($confidenceScore%)" else "On-Device OCR ($confidenceScore%)",
                                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.colorScheme.onSurface
                                 )

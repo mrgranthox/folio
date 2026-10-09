@@ -9,6 +9,7 @@ import android.net.Uri
 import android.util.Base64
 import com.example.BuildConfig
 import com.example.data.engine.ReceiptDraft
+import com.example.data.engine.ReceiptValidation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -167,7 +168,7 @@ class GeminiVisionReceiptService {
                 } catch (_: Exception) {}
             }
 
-            ReceiptDraft(
+            val untrustedDraft = ReceiptDraft(
                 amount = amount,
                 merchant = merchant,
                 date = timestamp,
@@ -181,6 +182,12 @@ class GeminiVisionReceiptService {
                 rawText = notes,
                 isAiEnhanced = true,
                 itemsSummary = notes
+            )
+            untrustedDraft.copy(
+                confidenceScore = minOf(
+                    untrustedDraft.confidenceScore,
+                    ReceiptValidation.confidenceCeiling(untrustedDraft)
+                )
             )
         } catch (e: Exception) {
             null

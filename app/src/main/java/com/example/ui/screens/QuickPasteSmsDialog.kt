@@ -101,7 +101,7 @@ fun QuickPasteSmsDialog(
     // Live parsed result as soon as SMS text is entered
     val parsedResult: ParsedSmsResult? = remember(smsText) {
         if (smsText.isNotBlank()) {
-            parserEngine.parse("MobileMoney", smsText)
+            parserEngine.parse("Pasted message", smsText, allowBodySenderInference = true)
         } else {
             null
         }

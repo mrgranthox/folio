@@ -8,6 +8,7 @@ import com.example.data.db.SeedData
 import com.example.data.engine.ParsedSmsResult
 import com.example.data.engine.ReceiptDraft
 import com.example.data.engine.ReceiptParserEngine
+import com.example.data.engine.IngestionPolicy
 import com.example.data.engine.ReconciliationEngine
 import com.example.data.engine.ReconciliationOutcome
 import com.example.data.engine.ReconciliationResult
@@ -216,10 +217,33 @@ class ExpenseRepository(context: Context) {
         sender: String,
         body: String,
         overrideAccountId: String? = null,
-        overrideCategoryId: String? = null
+        overrideCategoryId: String? = null,
+        sourceTimestamp: Long? = null,
+        trustedTransport: Boolean = true,
+        userConfirmed: Boolean = false
     ): Pair<ReconciliationOutcome, String> = withContext(Dispatchers.IO) {
-        val parsed = smsParser.parse(sender, body)
+        // Body inference is acceptable for an explicitly confirmed paste, but never for unattended input.
+        val parsed = smsParser.parse(
+            sender,
+            body,
+            sourceTimestamp,
+            allowBodySenderInference = trustedTransport || userConfirmed
+        )
         if (parsed.isFinancial) {
+            val policy = IngestionPolicy.evaluateSms(parsed, trustedTransport, userConfirmed)
+            if (!policy.mayPost) {
+                unrecognizedDao.insert(
+                    UnrecognizedMessageEntity(
+                        id = "review-${java.util.UUID.randomUUID()}",
+                        sender = sender,
+                        rawBody = body,
+                        timestamp = sourceTimestamp ?: System.currentTimeMillis(),
+                        suspectedAmount = parsed.amount?.toString(),
+                        suspectedMerchant = parsed.counterparty
+                    )
+                )
+                return@withContext Pair(ReconciliationOutcome.QUEUED_FOR_REVIEW, "Review required: ${policy.reason}")
+            }
             val accountsList = accountDao.getAllAccountsList()
             val targetAccount: AccountEntity = (if (!overrideAccountId.isNullOrBlank()) {
                 accountsList.firstOrNull { it.id == overrideAccountId }
@@ -246,7 +270,7 @@ class ExpenseRepository(context: Context) {
                 categoryId = cat.id,
                 categoryName = cat.name,
                 categoryColor = cat.colorHex
-            )
+            ).copy(isVerified = userConfirmed || parsed.confidenceScore >= IngestionPolicy.AUTO_POST_MIN_CONFIDENCE)
 
             val existingList = transactionDao.getAllTransactionsList()
             val eval = reconciler.evaluate(candidateTx, existingList)
@@ -288,7 +312,7 @@ class ExpenseRepository(context: Context) {
         } else {
             // Filter out promotional ads, marketing solicitations, and unknown third-party messages completely.
             // Only queue legitimate unparsed messages from authorized financial senders to the Unrecognized Inbox for manual review.
-            val isAuthorizedRail = smsParser.isAuthorizedFinancialSender(sender, body)
+            val isAuthorizedRail = smsParser.isAuthorizedFinancialSender(sender, body, allowBodyInference = trustedTransport)
             val isPromo = smsParser.isPromotionalOrManagementMessage(body, sender)
 
             if (isAuthorizedRail && !isPromo) {

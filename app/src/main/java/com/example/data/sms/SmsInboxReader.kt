@@ -15,7 +15,9 @@ data class SmsSyncReport(
     val insertedCount: Int,
     val duplicateSkippedCount: Int,
     val autoMergedCount: Int,
-    val queuedForReviewCount: Int
+    val queuedForReviewCount: Int,
+    val errorCount: Int = 0,
+    val errors: List<String> = emptyList()
 )
 
 class SmsInboxReader(private val context: Context) {
@@ -30,6 +32,8 @@ class SmsInboxReader(private val context: Context) {
         var duplicateSkippedCount = 0
         var autoMergedCount = 0
         var queuedCount = 0
+        var errorCount = 0
+        val errors = mutableListOf<String>()
 
         try {
             val uri: Uri = Telephony.Sms.Inbox.CONTENT_URI
@@ -50,14 +54,21 @@ class SmsInboxReader(private val context: Context) {
             cursor?.use { c ->
                 val addressIdx = c.getColumnIndex(Telephony.Sms.Inbox.ADDRESS)
                 val bodyIdx = c.getColumnIndex(Telephony.Sms.Inbox.BODY)
+                val dateIdx = c.getColumnIndex(Telephony.Sms.Inbox.DATE)
 
                 while (c.moveToNext()) {
                     totalScanned++
                     val sender = if (addressIdx != -1) c.getString(addressIdx) ?: "Unknown" else "Unknown"
                     val body = if (bodyIdx != -1) c.getString(bodyIdx) ?: "" else ""
+                    val messageTimestamp = if (dateIdx != -1) c.getLong(dateIdx) else System.currentTimeMillis()
 
                     if (body.isNotBlank()) {
-                        val (outcome, _) = repository.ingestSms(sender, body)
+                        val (outcome, _) = repository.ingestSms(
+                            sender = sender,
+                            body = body,
+                            sourceTimestamp = messageTimestamp,
+                            trustedTransport = true
+                        )
                         when (outcome) {
                             ReconciliationOutcome.INSERTED_NEW -> {
                                 financialCount++
@@ -79,7 +90,13 @@ class SmsInboxReader(private val context: Context) {
                     }
                 }
             }
-        } catch (_: Exception) {}
+        } catch (e: SecurityException) {
+            errorCount++
+            errors += "SMS permission denied"
+        } catch (e: Exception) {
+            errorCount++
+            errors += (e.localizedMessage ?: e.javaClass.simpleName)
+        }
 
         SmsSyncReport(
             totalScanned = totalScanned,
@@ -87,7 +104,9 @@ class SmsInboxReader(private val context: Context) {
             insertedCount = insertedCount,
             duplicateSkippedCount = duplicateSkippedCount,
             autoMergedCount = autoMergedCount,
-            queuedForReviewCount = queuedCount
+            queuedForReviewCount = queuedCount,
+            errorCount = errorCount,
+            errors = errors
         )
     }
 }

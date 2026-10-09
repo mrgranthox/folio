@@ -456,10 +456,10 @@ fun MainAppShell(
             sheetState = quickPasteSheetState,
             onDismiss = { showQuickPasteSmsSheet = false },
             onIngest = { rawSms ->
-                viewModel.simulateSmsIngest("MobileMoney", rawSms)
+                viewModel.simulateSmsIngest("Pasted message", rawSms)
             },
             onIngestWithDetails = { rawSms, accId, catId ->
-                viewModel.simulateSmsIngest("MobileMoney", rawSms, accId, catId)
+                viewModel.simulateSmsIngest("Pasted message", rawSms, accId, catId)
             }
         )
     }

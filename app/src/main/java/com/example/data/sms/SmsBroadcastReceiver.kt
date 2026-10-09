@@ -18,17 +18,23 @@ class SmsBroadcastReceiver : BroadcastReceiver() {
             if (messages != null && messages.isNotEmpty()) {
                 val fullBody = StringBuilder()
                 var sender = "Unknown"
+                var sourceTimestamp = System.currentTimeMillis()
                 for (sms in messages) {
                     sender = sms.displayOriginatingAddress ?: sms.originatingAddress ?: "Unknown"
+                    sourceTimestamp = minOf(sourceTimestamp, sms.timestampMillis)
                     fullBody.append(sms.displayMessageBody ?: sms.messageBody ?: "")
                 }
                 val body = fullBody.toString()
 
-                val repo = ExpenseRepository(context.applicationContext)
                 val pendingResult = goAsync()
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
-                        repo.ingestSms(sender, body)
+                        ExpenseRepository(context.applicationContext).ingestSms(
+                            sender = sender,
+                            body = body,
+                            sourceTimestamp = sourceTimestamp,
+                            trustedTransport = true
+                        )
                     } finally {
                         pendingResult.finish()
                     }

@@ -564,7 +564,14 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         overrideCategoryId: String? = null
     ) {
         viewModelScope.launch {
-            val (outcome, msg) = repository.ingestSms(sender, body, overrideAccountId, overrideCategoryId)
+            val (outcome, msg) = repository.ingestSms(
+                sender = sender,
+                body = body,
+                overrideAccountId = overrideAccountId,
+                overrideCategoryId = overrideCategoryId,
+                trustedTransport = false,
+                userConfirmed = true
+            )
             _snackbarEvent.emit(msg)
         }
     }
