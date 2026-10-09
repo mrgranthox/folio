@@ -502,7 +502,7 @@ class SmsParserEngine {
         var counterparty: String? = null
         var counterpartyPhone: String? = null
 
-        val stopLookahead = """(?=[.,;\n\r]|\s+(?:Current\s*Balance|Available\s*Balance|Avail\s*Bal|New\s*balance|Bal[:.]?|Balance[:.]?|Reference|Ref[:.]?|Transaction\s*ID|Transaction\s*Id|Financial\s*Transaction\s*Id|Trans\s*ID|Txn\s*ID|Fee\s*charged|TRANSACTION\s*FEE|Fee|Tax\s*charged|Download\s*the\s*MoMo|Cash-out\s*fee|Cash\s*in\s*\(Deposit\)|Please\s*do\s*not|Thank\s*you|on\s+\d{1,2}[-/.]\d{1,2}|was\s+successful|has\s+been|Click\s*here)|$)"""
+        val stopLookahead = """(?=[.,;\n\r]|\s+(?:Current\s*Balance|Available\s*Balance|Avail\s*Bal|New\s*balance|Bal[:.]?|Balance[:.]?|Reference|Ref[:.]?|Transaction\s*ID|Transaction\s*Id|Financial\s*Transaction\s*Id|Trans\s*ID|Txn\s*ID|Fee\s*charged|TRANSACTION\s*FEE|Fee|Tax\s*charged|Download\s*the\s*MoMo|Cash-out\s*fee|Cash\s*in\s*\(Deposit\)|Please\s*do\s*not|Thank\s*you|Date[:.]?|Time[:.]?|on\s+\d{1,2}[-/.]\d{1,2}|was\s+successful|has\s+been|Click\s*here)|$)"""
 
         // 7a. Cash Out / In Agent pattern: e.g. "from Agent 0244111222 - JOE VENTURES was successful"
         if (subType == SmsTransactionSubtype.CASH_OUT || subType == SmsTransactionSubtype.CASH_IN) {

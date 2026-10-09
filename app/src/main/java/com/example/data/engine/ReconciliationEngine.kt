@@ -85,14 +85,6 @@ class ReconciliationEngine {
                     matchScore = 100,
                     matchFactors = listOf("Identical Transaction ID: ${incoming.externalRef}")
                 )
-            } else {
-                // If Transaction ID is present and unique, it is NOT a duplicate!
-                return ReconciliationResult(
-                    outcome = ReconciliationOutcome.INSERTED_NEW,
-                    resolvedTransaction = incoming,
-                    matchScore = 0,
-                    matchFactors = listOf("Unique Transaction ID: ${incoming.externalRef}")
-                )
             }
         }
 
