@@ -132,6 +132,7 @@ fun SettingsScreen(
     val deviceAuthVerificationLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
+        FolioSecurityManager.setExternalIntentActive(false)
         if (result.resultCode == Activity.RESULT_OK) {
             FolioSecurityManager.setLockType(context, SecurityLockType.SYSTEM)
             FolioSecurityManager.setAppLockEnabled(context, true)
@@ -161,6 +162,7 @@ fun SettingsScreen(
     val smsPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
+        FolioSecurityManager.setExternalIntentActive(false)
         smsReceiverPermissionGranted = isGranted
         if (isGranted) {
             isAutomaticSmsTrackingEnabled = true
@@ -176,6 +178,7 @@ fun SettingsScreen(
     val readSmsPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
+        FolioSecurityManager.setExternalIntentActive(false)
         if (isGranted) {
             onSyncInboxSms()
         } else {
@@ -365,6 +368,7 @@ fun SettingsScreen(
                             if (enable) {
                                 val hasPerm = ContextCompat.checkSelfPermission(context, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED
                                 if (!hasPerm) {
+                                    FolioSecurityManager.setExternalIntentActive(true)
                                     smsPermissionLauncher.launch(Manifest.permission.RECEIVE_SMS)
                                 } else {
                                     smsReceiverPermissionGranted = true
@@ -513,6 +517,7 @@ fun SettingsScreen(
                                     if (hasReadPermission) {
                                         onSyncInboxSms()
                                     } else {
+                                        FolioSecurityManager.setExternalIntentActive(true)
                                         readSmsPermissionLauncher.launch(Manifest.permission.READ_SMS)
                                     }
                                 },
@@ -723,6 +728,7 @@ fun SettingsScreen(
                     showLockSetupSheet = false
                     val intent = FolioSecurityManager.createConfirmDeviceCredentialIntent(context)
                     if (intent != null) {
+                        FolioSecurityManager.setExternalIntentActive(true)
                         deviceAuthVerificationLauncher.launch(intent)
                     } else {
                         FolioSecurityManager.setLockType(context, SecurityLockType.SYSTEM)

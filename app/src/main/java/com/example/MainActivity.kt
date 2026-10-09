@@ -95,7 +95,7 @@ class MainActivity : ComponentActivity() {
 
         lifecycle.addObserver(LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP) {
-                if (!isAuthenticating && FolioSecurityManager.isAppLockEnabled(this@MainActivity)) {
+                if (!FolioSecurityManager.isExternalIntentActive && FolioSecurityManager.isAppLockEnabled(this@MainActivity)) {
                     isAppLockedState.value = true
                 }
             }
@@ -106,6 +106,7 @@ class MainActivity : ComponentActivity() {
                 val permissionLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.RequestMultiplePermissions()
                 ) { _ ->
+                    FolioSecurityManager.setExternalIntentActive(false)
                     // Permissions handled
                 }
 
@@ -118,20 +119,21 @@ class MainActivity : ComponentActivity() {
                         permissionsToRequest.add(Manifest.permission.READ_SMS)
                     }
                     if (permissionsToRequest.isNotEmpty()) {
+                        FolioSecurityManager.setExternalIntentActive(true)
                         permissionLauncher.launch(permissionsToRequest.toTypedArray())
                     }
                 }
 
                 val isLocked by remember { isAppLockedState }
 
-                Surface(modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    MainAppShell(viewModel = viewModel)
+
                     if (isLocked) {
                         BiometricLockScreen(
                             onUnlock = { isAppLockedState.value = false },
-                            onSetAuthenticating = { isAuthenticating = it }
+                            onSetAuthenticating = { FolioSecurityManager.setExternalIntentActive(it) }
                         )
-                    } else {
-                        MainAppShell(viewModel = viewModel)
                     }
                 }
             }

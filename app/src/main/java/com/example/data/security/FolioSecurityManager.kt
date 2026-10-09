@@ -35,6 +35,20 @@ object FolioSecurityManager {
     }
 
     /**
+     * Flag indicating an in-app external activity flow is currently active
+     * (e.g. Taking a camera photo, picking an image from gallery, device biometric verification).
+     * When active, transient ON_STOP events from launching these system activities
+     * will not trigger the app lock gate.
+     */
+    @Volatile
+    var isExternalIntentActive: Boolean = false
+        private set
+
+    fun setExternalIntentActive(active: Boolean) {
+        isExternalIntentActive = active
+    }
+
+    /**
      * Checks if the app lock gate is enabled.
      */
     fun isAppLockEnabled(context: Context): Boolean {

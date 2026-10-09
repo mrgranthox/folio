@@ -62,7 +62,9 @@ import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import com.example.data.security.FolioSecurityManager
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -116,23 +118,24 @@ fun OcrScannerSheet(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var photoUri by remember { mutableStateOf<Uri?>(null) }
+    var photoUriString by rememberSaveable { mutableStateOf<String?>(null) }
+    val photoUri = photoUriString?.let { Uri.parse(it) }
     var photoFile by remember { mutableStateOf<File?>(null) }
-    var isProcessingOcr by remember { mutableStateOf(false) }
-    var ocrStatusText by remember { mutableStateOf("Processing...") }
+    var isProcessingOcr by rememberSaveable { mutableStateOf(false) }
+    var ocrStatusText by rememberSaveable { mutableStateOf("Processing...") }
 
-    var merchant by remember { mutableStateOf("") }
-    var amountText by remember { mutableStateOf("") }
-    var currency by remember { mutableStateOf("GHS") }
-    var referenceNumber by remember { mutableStateOf("") }
-    var transactionType by remember { mutableStateOf("EXPENSE") } // "EXPENSE", "INCOME", "BILL_PAYMENT", "TRANSFER"
-    var taxVat by remember { mutableDoubleStateOf(0.0) }
-    var notes by remember { mutableStateOf("") }
-    var confidenceScore by remember { mutableStateOf<Int?>(null) }
-    var isAiVerified by remember { mutableStateOf(false) }
-    var selectedAccountId by remember { mutableStateOf(accounts.firstOrNull()?.id ?: "") }
-    var selectedCategoryId by remember { mutableStateOf(categories.firstOrNull()?.id ?: "") }
-    var receiptTimestamp by remember { mutableStateOf(System.currentTimeMillis()) }
+    var merchant by rememberSaveable { mutableStateOf("") }
+    var amountText by rememberSaveable { mutableStateOf("") }
+    var currency by rememberSaveable { mutableStateOf("GHS") }
+    var referenceNumber by rememberSaveable { mutableStateOf("") }
+    var transactionType by rememberSaveable { mutableStateOf("EXPENSE") } // "EXPENSE", "INCOME", "BILL_PAYMENT", "TRANSFER"
+    var taxVat by rememberSaveable { mutableDoubleStateOf(0.0) }
+    var notes by rememberSaveable { mutableStateOf("") }
+    var confidenceScore by rememberSaveable { mutableStateOf<Int?>(null) }
+    var isAiVerified by rememberSaveable { mutableStateOf(false) }
+    var selectedAccountId by rememberSaveable { mutableStateOf(accounts.firstOrNull()?.id ?: "") }
+    var selectedCategoryId by rememberSaveable { mutableStateOf(categories.firstOrNull()?.id ?: "") }
+    var receiptTimestamp by rememberSaveable { mutableStateOf(System.currentTimeMillis()) }
 
     fun applyDraft(draft: ReceiptDraft, fromAi: Boolean) {
         merchant = draft.merchant ?: ""
@@ -233,8 +236,9 @@ fun OcrScannerSheet(
     val takePictureLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
+        FolioSecurityManager.setExternalIntentActive(false)
         if (success && photoUri != null) {
-            processImageUri(photoUri!!)
+            processImageUri(photoUri)
         }
     }
 
@@ -251,12 +255,15 @@ fun OcrScannerSheet(
                     "${context.packageName}.fileprovider",
                     tempFile
                 )
-                photoUri = uri
+                photoUriString = uri.toString()
+                FolioSecurityManager.setExternalIntentActive(true)
                 takePictureLauncher.launch(uri)
             } catch (e: Exception) {
+                FolioSecurityManager.setExternalIntentActive(false)
                 Toast.makeText(context, "Unable to create camera file: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
             }
         } else {
+            FolioSecurityManager.setExternalIntentActive(false)
             Toast.makeText(context, "Camera permission is required to photograph receipts.", Toast.LENGTH_LONG).show()
         }
     }
@@ -265,8 +272,9 @@ fun OcrScannerSheet(
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
+        FolioSecurityManager.setExternalIntentActive(false)
         if (uri != null) {
-            photoUri = uri
+            photoUriString = uri.toString()
             processImageUri(uri)
         }
     }
@@ -282,12 +290,15 @@ fun OcrScannerSheet(
                     "${context.packageName}.fileprovider",
                     tempFile
                 )
-                photoUri = uri
+                photoUriString = uri.toString()
+                FolioSecurityManager.setExternalIntentActive(true)
                 takePictureLauncher.launch(uri)
             } catch (e: Exception) {
+                FolioSecurityManager.setExternalIntentActive(false)
                 Toast.makeText(context, "Unable to create camera file: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
             }
         } else {
+            FolioSecurityManager.setExternalIntentActive(true)
             cameraPermissionLauncher.launch(permission)
         }
     }
@@ -354,6 +365,7 @@ fun OcrScannerSheet(
 
                 OutlinedButton(
                     onClick = {
+                        FolioSecurityManager.setExternalIntentActive(true)
                         photoPickerLauncher.launch(
                             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                         )
