@@ -35,13 +35,16 @@ import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Fingerprint
-import androidx.compose.material.icons.filled.Info
+import android.app.Activity
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SystemUpdate
+import com.example.data.security.FolioSecurityManager
+import com.example.data.security.SecurityLockType
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -114,8 +117,36 @@ fun SettingsScreen(
 
     val securityPrefs = remember { context.getSharedPreferences("folio_security_prefs", Context.MODE_PRIVATE) }
     var isBiometricsEnabled by remember {
-        mutableStateOf(securityPrefs.getBoolean("biometrics_enabled", false))
+        mutableStateOf(FolioSecurityManager.isAppLockEnabled(context))
     }
+    var lockType by remember {
+        mutableStateOf(FolioSecurityManager.getLockType(context))
+    }
+    var hasCustomPin by remember {
+        mutableStateOf(FolioSecurityManager.hasCustomPin(context))
+    }
+    var showLockSetupSheet by remember { mutableStateOf(false) }
+    var showPinSetupDialog by remember { mutableStateOf(false) }
+    var showDisableConfirmDialog by remember { mutableStateOf(false) }
+
+    val deviceAuthVerificationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            FolioSecurityManager.setLockType(context, SecurityLockType.SYSTEM)
+            FolioSecurityManager.setAppLockEnabled(context, true)
+            isBiometricsEnabled = true
+            lockType = SecurityLockType.SYSTEM
+            coroutineScope.launch {
+                snackbarHostState?.showSnackbar("Device Screen Lock enabled successfully.")
+            }
+        } else {
+            coroutineScope.launch {
+                snackbarHostState?.showSnackbar("Device authentication cancelled.")
+            }
+        }
+    }
+
     var isAutomaticSmsTrackingEnabled by remember {
         mutableStateOf(securityPrefs.getBoolean("automatic_sms_tracking", true))
     }
@@ -509,17 +540,6 @@ fun SettingsScreen(
                         )
 
                         // 3. Biometric / PIN App Lock
-                        val handleToggleBiometrics: (Boolean) -> Unit = { enabled ->
-                            isBiometricsEnabled = enabled
-                            securityPrefs.edit().putBoolean("biometrics_enabled", enabled).apply()
-                            coroutineScope.launch {
-                                snackbarHostState?.showSnackbar(
-                                    if (enabled) "Biometric Lock enabled."
-                                    else "Biometric Lock disabled."
-                                )
-                            }
-                        }
-
                         Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = if (isBiometricsEnabled) PrimaryGreen.copy(alpha = 0.08f) else Color.Transparent,
@@ -527,85 +547,135 @@ fun SettingsScreen(
                                 .fillMaxWidth()
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
-                            Row(
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { handleToggleBiometrics(!isBiometricsEnabled) }
-                                    .padding(horizontal = 10.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                    .padding(horizontal = 10.dp, vertical = 10.dp)
                             ) {
-                                Box(
+                                Row(
                                     modifier = Modifier
-                                        .size(42.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(
-                                            if (isBiometricsEnabled) PrimaryGreen.copy(alpha = 0.18f)
-                                            else MaterialTheme.colorScheme.surfaceVariant
-                                        ),
-                                    contentAlignment = Alignment.Center
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            if (isBiometricsEnabled) {
+                                                showDisableConfirmDialog = true
+                                            } else {
+                                                showLockSetupSheet = true
+                                            }
+                                        },
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Fingerprint,
-                                        contentDescription = null,
-                                        tint = if (isBiometricsEnabled) PrimaryGreen else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(22.dp)
+                                    Box(
+                                        modifier = Modifier
+                                            .size(42.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(
+                                                if (isBiometricsEnabled) PrimaryGreen.copy(alpha = 0.18f)
+                                                else MaterialTheme.colorScheme.surfaceVariant
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = if (lockType == SecurityLockType.CUSTOM_PIN) Icons.Default.Lock else Icons.Default.Fingerprint,
+                                            contentDescription = null,
+                                            tint = if (isBiometricsEnabled) PrimaryGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(14.dp))
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = "Biometric & App Lock",
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = if (isBiometricsEnabled) CreditGreen.copy(alpha = 0.2f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                                            ) {
+                                                Text(
+                                                    text = if (isBiometricsEnabled) "ACTIVE" else "OFF",
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        fontWeight = FontWeight.ExtraBold,
+                                                        fontSize = 9.sp
+                                                    ),
+                                                    color = if (isBiometricsEnabled) CreditGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = if (isBiometricsEnabled) {
+                                                if (lockType == SecurityLockType.CUSTOM_PIN) "Protected by Custom Folio 4-Digit PIN"
+                                                else "Protected by Device Screen Lock (Fingerprint / PIN)"
+                                            } else {
+                                                "Secure ledger with device settings or custom PIN"
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (isBiometricsEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(8.dp))
+
+                                    Switch(
+                                        checked = isBiometricsEnabled,
+                                        onCheckedChange = { checked ->
+                                            if (checked) {
+                                                showLockSetupSheet = true
+                                            } else {
+                                                showDisableConfirmDialog = true
+                                            }
+                                        },
+                                        thumbContent = {
+                                            Icon(
+                                                imageVector = if (isBiometricsEnabled) Icons.Default.Check else Icons.Default.Close,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(SwitchDefaults.IconSize)
+                                            )
+                                        },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = Color.White,
+                                            checkedTrackColor = PrimaryGreen,
+                                            checkedIconColor = PrimaryGreen,
+                                            uncheckedThumbColor = Color.White,
+                                            uncheckedTrackColor = MaterialTheme.colorScheme.outlineVariant,
+                                            uncheckedIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
                                     )
                                 }
 
-                                Spacer(modifier = Modifier.width(14.dp))
-
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = "Biometric App Lock",
-                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Surface(
-                                            shape = RoundedCornerShape(6.dp),
-                                            color = if (isBiometricsEnabled) CreditGreen.copy(alpha = 0.2f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                                if (isBiometricsEnabled) {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        OutlinedButton(
+                                            onClick = { showLockSetupSheet = true },
+                                            shape = RoundedCornerShape(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                            modifier = Modifier.weight(1f)
                                         ) {
-                                            Text(
-                                                text = if (isBiometricsEnabled) "ACTIVE" else "OFF",
-                                                style = MaterialTheme.typography.labelSmall.copy(
-                                                    fontWeight = FontWeight.ExtraBold,
-                                                    fontSize = 9.sp
-                                                ),
-                                                color = if (isBiometricsEnabled) CreditGreen else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-                                            )
+                                            Text("Change Method", fontSize = 12.sp)
+                                        }
+
+                                        if (lockType == SecurityLockType.CUSTOM_PIN) {
+                                            Button(
+                                                onClick = { showPinSetupDialog = true },
+                                                shape = RoundedCornerShape(10.dp),
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text("Change PIN", fontSize = 12.sp)
+                                            }
                                         }
                                     }
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = if (isBiometricsEnabled) "Ledger protected by biometric authentication" else "Require fingerprint scan on launch",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = if (isBiometricsEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
                                 }
-
-                                Spacer(modifier = Modifier.width(8.dp))
-
-                                Switch(
-                                    checked = isBiometricsEnabled,
-                                    onCheckedChange = handleToggleBiometrics,
-                                    thumbContent = {
-                                        Icon(
-                                            imageVector = if (isBiometricsEnabled) Icons.Default.Check else Icons.Default.Close,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(SwitchDefaults.IconSize)
-                                        )
-                                    },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color.White,
-                                        checkedTrackColor = PrimaryGreen,
-                                        checkedIconColor = PrimaryGreen,
-                                        uncheckedThumbColor = Color.White,
-                                        uncheckedTrackColor = MaterialTheme.colorScheme.outlineVariant,
-                                        uncheckedIconColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                )
                             }
                         }
                     }
@@ -644,6 +714,63 @@ fun SettingsScreen(
             item {
                 Spacer(modifier = Modifier.height(72.dp))
             }
+        }
+
+        if (showLockSetupSheet) {
+            AppLockSetupSheet(
+                onDismiss = { showLockSetupSheet = false },
+                onSelectSystemLock = {
+                    showLockSetupSheet = false
+                    val intent = FolioSecurityManager.createConfirmDeviceCredentialIntent(context)
+                    if (intent != null) {
+                        deviceAuthVerificationLauncher.launch(intent)
+                    } else {
+                        FolioSecurityManager.setLockType(context, SecurityLockType.SYSTEM)
+                        FolioSecurityManager.setAppLockEnabled(context, true)
+                        isBiometricsEnabled = true
+                        lockType = SecurityLockType.SYSTEM
+                        coroutineScope.launch {
+                            snackbarHostState?.showSnackbar("Device Screen Lock enabled.")
+                        }
+                    }
+                },
+                onSelectCustomPin = {
+                    showLockSetupSheet = false
+                    showPinSetupDialog = true
+                }
+            )
+        }
+
+        if (showPinSetupDialog) {
+            PinSetupDialog(
+                onDismiss = { showPinSetupDialog = false },
+                onPinCreated = { newPin ->
+                    showPinSetupDialog = false
+                    FolioSecurityManager.setCustomPin(context, newPin)
+                    FolioSecurityManager.setLockType(context, SecurityLockType.CUSTOM_PIN)
+                    FolioSecurityManager.setAppLockEnabled(context, true)
+                    isBiometricsEnabled = true
+                    lockType = SecurityLockType.CUSTOM_PIN
+                    hasCustomPin = true
+                    coroutineScope.launch {
+                        snackbarHostState?.showSnackbar("Custom Folio PIN set and App Lock enabled.")
+                    }
+                }
+            )
+        }
+
+        if (showDisableConfirmDialog) {
+            DisableAppLockDialog(
+                onDismiss = { showDisableConfirmDialog = false },
+                onConfirmDisable = {
+                    showDisableConfirmDialog = false
+                    FolioSecurityManager.setAppLockEnabled(context, false)
+                    isBiometricsEnabled = false
+                    coroutineScope.launch {
+                        snackbarHostState?.showSnackbar("App Lock disabled.")
+                    }
+                }
+            )
         }
     }
 }
